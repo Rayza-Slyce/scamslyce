@@ -1874,10 +1874,6 @@ if analyse_button:
             for point in summary_points:
                 st.write(f"- {point}")
 
-            st.subheader("Simple Summary to Share")
-            simple_summary = build_simple_summary(result, user_situation)
-            st.text_area("Simple summary", simple_summary, height=180)
-
         with tab_actions:
             st.subheader("What You Should Do Next")
             for action in build_action_plan(result, user_situation):
@@ -2083,17 +2079,41 @@ if analyse_button:
             "confusing wording, mobile layout problems, or reporting-action suggestions."
         )
 
+        st.warning(
+            "Do not include passwords, private links, account recovery links, magic login links, banking links, "
+            "internal company URLs, or personal tokens in GitHub issues."
+        )
+
+        col_a, col_b = st.columns(2)
+
+        with col_a:
+            st.markdown(
+                "[Report a false positive](https://github.com/Rayza-Slyce/scamslyce/issues/new?template=false_positive.md)"
+            )
+            st.markdown(
+                "[Report a missed scam](https://github.com/Rayza-Slyce/scamslyce/issues/new?template=missed_scam.md)"
+            )
+            st.markdown(
+                "[Report confusing wording/advice](https://github.com/Rayza-Slyce/scamslyce/issues/new?template=wording_or_advice.md)"
+            )
+
+        with col_b:
+            st.markdown(
+                "[Report mobile/layout issue](https://github.com/Rayza-Slyce/scamslyce/issues/new?template=mobile_layout.md)"
+            )
+            st.markdown(
+                "[Suggest a feature](https://github.com/Rayza-Slyce/scamslyce/issues/new?template=feature_request.md)"
+            )
+            st.markdown(
+                "[View project on GitHub](https://github.com/Rayza-Slyce/scamslyce)"
+            )
+
         with st.expander("What to include in feedback"):
             st.write("- The URL you tested, unless it contains private tokens or sensitive data.")
             st.write("- Whether the result felt right or wrong.")
             st.write("- What ScamSlyce scored it.")
             st.write("- What device/browser you used.")
             st.write("- Any wording or advice that confused you.")
-
-        st.info(
-            "For now, send feedback manually or open an issue in the GitHub repo once it is published. "
-            "Do not include passwords, private links, account recovery links, or personal tokens."
-        )
 
     except Exception as e:
         st.error(str(e))
