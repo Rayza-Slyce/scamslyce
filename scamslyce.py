@@ -1931,20 +1931,15 @@ if analyse_button:
                                 st.write(f"**Subject:** {action['subject']}")
                                 st.caption("Copy the email address, subject, and message manually. ScamSlyce does not open email apps automatically.")
 
-                            st.text_area(
-                                f"Text to paste for action {action['priority']}",
-                                action["paste"],
-                                height=220,
-                                key=f"report_action_{action['priority']}",
-                            )
-
+                            st.caption("Use the full copy-paste abuse report below when submitting this report.")
                 st.subheader("Optional Copy-Paste Report")
+                st.write("Only use this if you still have a reason to report the link despite the low-risk result.")
                 report = build_report(result, user_situation)
                 st.text_area("Optional report text", report, height=420)
 
             else:
                 st.subheader("Priority Reporting Actions")
-                st.write("Start with the first action. Use the generated text boxes below so the user is not left guessing what to send.")
+                st.write("Start with the first action. These are the places to report the link. Use the full copy-paste abuse report below for each report.")
 
                 reporting_actions = build_priority_reporting_actions(result, user_situation)
 
@@ -1960,14 +1955,12 @@ if analyse_button:
                             st.write(f"**Subject:** {action['subject']}")
                             st.caption("Copy the email address, subject, and message manually. ScamSlyce does not open email apps automatically.")
 
-                        st.text_area(
-                            f"Text to paste for action {action['priority']}",
-                            action["paste"],
-                            height=220,
-                            key=f"report_action_{action['priority']}",
-                        )
-
+                        st.caption("Use the full copy-paste abuse report below when submitting this report.")
                 st.subheader("Full Copy-Paste Abuse Report")
+                st.write(
+                    "Copy this report and paste it into Netcraft, the impersonated brand report, hosting/backend abuse reports, "
+                    "or the platform where the message was received."
+                )
                 report = build_report(result, user_situation)
                 st.text_area("Full report text", report, height=520)
 
