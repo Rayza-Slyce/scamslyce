@@ -1,6 +1,6 @@
 # ScamSlyce URL Regression Results
 
-Generated: 2026-06-04T20:07:12
+Generated: 2026-06-04T20:18:56
 
 Passed: 17
 Failed: 0

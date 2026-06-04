@@ -1213,7 +1213,7 @@ def score_result(findings: dict) -> tuple[int, str]:
             word in findings["subdomain"]
             for word in ["login", "verify", "secure", "account", "support", "status", "center", "centre"]
         ):
-                score += 10
+            score += 10
 
     # Redirects are common. Score only if they change registered domain,
     # come from shorteners, or appear with other suspicious context.
