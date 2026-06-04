@@ -24,14 +24,78 @@ HOSTING_PLATFORMS = {
     "replit.app", "glitch.me", "wixsite.com", "weebly.com",
 }
 
-SUSPICIOUS_WORDS = {
-    "verify", "verification", "login", "account", "password", "secure", "security",
-    "appeal", "suspended", "disabled", "bonus", "reward", "urgent", "confirm",
-    "update", "support", "wallet", "bank", "payment", "invoice", "limited",
-    "warning", "unusual", "activity", "locked", "review", "violation",
-    "copyright", "business", "manager", "credentials", "authenticate",
-    "authentication",
+KNOWN_SAFE_DOMAINS = {
+    "google.com",
+    "youtube.com",
+    "youtu.be",
+    "github.com",
+    "microsoft.com",
+    "office.com",
+    "live.com",
+    "outlook.com",
+    "apple.com",
+    "icloud.com",
+    "amazon.com",
+    "amazon.co.uk",
+    "paypal.com",
+    "paypal.co.uk",
+    "facebook.com",
+    "meta.com",
+    "instagram.com",
+    "gov.uk",
+    "jdsports.co.uk",
+    "streamlit.app",
 }
+
+STRONG_SUSPICIOUS_WORDS = {
+    "password",
+    "credentials",
+    "verify",
+    "verification",
+    "suspended",
+    "disabled",
+    "locked",
+    "appeal",
+    "urgent",
+    "unusual activity",
+    "copyright violation",
+    "security warning",
+    "account disabled",
+    "account suspended",
+    "login attempt",
+}
+
+MEDIUM_SUSPICIOUS_WORDS = {
+    "login",
+    "account",
+    "secure",
+    "security",
+    "confirm",
+    "payment",
+    "wallet",
+    "invoice",
+    "authenticate",
+    "authentication",
+    "support",
+    "review",
+}
+
+WEAK_SUSPICIOUS_WORDS = {
+    "business",
+    "manager",
+    "limited",
+    "update",
+    "activity",
+    "bonus",
+    "reward",
+}
+
+SUSPICIOUS_WORDS = (
+    STRONG_SUSPICIOUS_WORDS
+    | MEDIUM_SUSPICIOUS_WORDS
+    | WEAK_SUSPICIOUS_WORDS
+)
+
 
 BRAND_KEYWORDS = {
     "Meta/Facebook": ["meta", "facebook", "fb", "business manager", "meta business"],
@@ -50,7 +114,7 @@ LEGIT_BRAND_DOMAINS = {
     "Instagram": ["instagram.com", "meta.com"],
     "PayPal": ["paypal.com", "paypal.co.uk"],
     "Microsoft": ["microsoft.com", "live.com", "office.com", "outlook.com"],
-    "Google": ["google.com", "gmail.com"],
+    "Google": ["google.com", "gmail.com", "youtube.com", "youtu.be"],
     "Apple": ["apple.com", "icloud.com"],
     "Amazon": ["amazon.com", "amazon.co.uk"],
     "HMRC/GOV.UK": ["gov.uk"],
@@ -262,6 +326,28 @@ def is_legit_brand_domain(registered_domain: str, brand: str) -> bool:
         registered_domain == legit_domain
         or registered_domain.endswith("." + legit_domain)
         for legit_domain in legit_domains
+    )
+
+
+def is_expected_brand_relationship(registered_domain: str, brand: str) -> bool:
+    """
+    Some brands legitimately operate across multiple related domains.
+    Example: YouTube pages commonly reference Google accounts, APIs, policies,
+    and support pages. That should not count as Google impersonation.
+    """
+    trusted_relationships = {
+        "Google": {"youtube.com", "youtu.be", "google.com", "gmail.com"},
+        "Meta/Facebook": {"facebook.com", "fb.com", "messenger.com", "meta.com", "instagram.com"},
+        "Instagram": {"instagram.com", "facebook.com", "meta.com"},
+        "Microsoft": {"microsoft.com", "office.com", "outlook.com", "live.com"},
+    }
+
+    trusted_domains = trusted_relationships.get(brand, set())
+
+    return any(
+        registered_domain == trusted_domain
+        or registered_domain.endswith("." + trusted_domain)
+        for trusted_domain in trusted_domains
     )
 
 
@@ -639,7 +725,10 @@ def detect_brand_impersonation(url: str, html: str, message_text: str) -> list[d
     for brand, keywords in BRAND_KEYWORDS.items():
         for keyword in keywords:
             if keyword.lower() in combined:
-                if not is_legit_brand_domain(registered_domain, brand):
+                if (
+                    not is_legit_brand_domain(registered_domain, brand)
+                    and not is_expected_brand_relationship(registered_domain, brand)
+                ):
                     matches.append({
                         "brand": brand,
                         "keyword": keyword,
@@ -764,7 +853,29 @@ def detect_qr_session_pattern(result: dict) -> bool:
 
 
 
+
+def is_known_safe_domain(result: dict) -> bool:
+    domains = {
+        result.get("original_domain", ""),
+        result.get("final_domain", ""),
+    }
+
+    return any(domain in KNOWN_SAFE_DOMAINS for domain in domains)
+
+
+def get_suspicious_word_categories(result: dict) -> dict:
+    found = set(result.get("suspicious_words", []))
+
+    return {
+        "strong": sorted(found.intersection(STRONG_SUSPICIOUS_WORDS)),
+        "medium": sorted(found.intersection(MEDIUM_SUSPICIOUS_WORDS)),
+        "weak": sorted(found.intersection(WEAK_SUSPICIOUS_WORDS)),
+    }
+
+
 def get_high_risk_js_terms(result: dict) -> list[str]:
+    # These are higher-value indicators. Generic JS terms like create,
+    # setTimeout, location.href, and window.location are too common to score alone.
     high_risk_terms = {
         "qr_link",
         "qr_code_login",
@@ -772,11 +883,8 @@ def get_high_risk_js_terms(result: dict) -> list[str]:
         "session_id",
         "sessionid",
         "bearer",
-        "authorization",
         "supabase.co",
         "functions/v1",
-        "document.cookie",
-        "localstorage",
     }
 
     found = []
@@ -788,10 +896,8 @@ def get_high_risk_js_terms(result: dict) -> list[str]:
 
 
 def has_meaningful_js_signal(result: dict) -> bool:
-    high_risk_terms = get_high_risk_js_terms(result)
-
     return bool(
-        high_risk_terms
+        get_high_risk_js_terms(result)
         or result["qr_session_pattern_detected"]
         or result["js_url_classification"]["api_like_urls"]
         or result["js_url_classification"]["hosting_platform_js_urls"]
@@ -804,7 +910,28 @@ def has_suspicious_context(result: dict) -> bool:
         or result["is_shortener"]
         or result["final_domain"] != result["original_domain"]
         or result["qr_session_pattern_detected"]
-        or result["hosted_platform_detected"]
+        or (
+            result["hosted_platform_detected"]
+            and bool(result["brand_impersonation"])
+        )
+    )
+
+
+def has_strong_danger_indicator(result: dict) -> bool:
+    return bool(
+        result["brand_impersonation"]
+        or result["is_shortener"]
+        or result["final_domain"] != result["original_domain"]
+        or result["forms"]["password_field_detected"]
+        or result["qr_session_pattern_detected"]
+        or (
+            result["js_url_classification"]["api_like_urls"]
+            and has_suspicious_context(result)
+        )
+        or (
+            result["js_url_classification"]["hosting_platform_js_urls"]
+            and has_suspicious_context(result)
+        )
     )
 
 
@@ -818,6 +945,7 @@ def score_result(findings: dict) -> tuple[int, str]:
     suspicious_context = has_suspicious_context(findings)
     meaningful_js = has_meaningful_js_signal(findings)
     high_risk_js_terms = get_high_risk_js_terms(findings)
+    word_categories = get_suspicious_word_categories(findings)
 
     # Strong URL/domain indicators
     if findings["is_shortener"]:
@@ -839,7 +967,8 @@ def score_result(findings: dict) -> tuple[int, str]:
         ):
             score += 10
 
-    # Redirects are only meaningful if they hide/change destination or happen in suspicious context.
+    # Redirects are common. Score only if they change registered domain,
+    # come from shorteners, or appear with other suspicious context.
     if findings["redirect_count"] > 0:
         if findings["final_domain"] != findings["original_domain"] or findings["is_shortener"]:
             score += 15
@@ -849,36 +978,41 @@ def score_result(findings: dict) -> tuple[int, str]:
     if findings["redirect_count"] >= 3 and suspicious_context:
         score += 10
 
-    # Forms are normal on many sites. Score only when they collect credentials or appear in suspicious context.
+    # Forms are normal on search/ecommerce/login sites.
     if findings["forms"]["password_field_detected"]:
         score += 30
     elif findings["forms"]["form_count"] > 0 and suspicious_context:
         score += 10
 
-    # HTTP is a weak signal by itself, stronger in suspicious context.
+    # HTTP is weak by itself.
     if findings["uses_http"]:
         score += 10 if suspicious_context else 5
 
-    # Suspicious wording is only weak evidence. It needs multiple terms or suspicious context.
-    if len(findings["suspicious_words"]) >= 3 and suspicious_context:
-        score += 10
-    elif len(findings["suspicious_words"]) >= 5:
-        score += 5
+    # Weighted suspicious wording.
+    if suspicious_context:
+        if len(word_categories["strong"]) >= 1:
+            score += 10
+        elif len(word_categories["medium"]) >= 3:
+            score += 5
+    else:
+        if len(word_categories["strong"]) >= 3:
+            score += 5
 
-    # External links/CDNs are normal. Score only with suspicious context.
+    # External links/CDNs are normal. Only score in suspicious context.
     if findings["link_classification"]["external_links"] and suspicious_context:
         score += 5
 
     if findings["link_classification"]["official_brand_links"] and findings["brand_impersonation"]:
         score += 15
 
-    # JavaScript is noisy. Generic terms like create/location.href/setTimeout are normal.
-    # Score only high-risk JS indicators or backend/session URLs.
+    # JavaScript is noisy. Score only meaningful/high-risk JS signals.
     if meaningful_js:
-        if high_risk_js_terms:
+        if high_risk_js_terms and suspicious_context:
             score += 15
+        elif high_risk_js_terms and len(high_risk_js_terms) >= 3:
+            score += 5
 
-        if findings["js_url_classification"]["api_like_urls"]:
+        if findings["js_url_classification"]["api_like_urls"] and suspicious_context:
             score += 15
 
         if findings["js_url_classification"]["hosting_platform_js_urls"] and suspicious_context:
@@ -889,6 +1023,11 @@ def score_result(findings: dict) -> tuple[int, str]:
 
     if findings["qr_session_pattern_detected"]:
         score += 35
+
+    # Known safe / official domains should not be punished for normal web behaviour.
+    # This is not a full whitelist. Strong danger indicators still override it.
+    if is_known_safe_domain(findings) and not has_strong_danger_indicator(findings):
+        score = min(score, 20)
 
     score = min(score, 100)
 
@@ -1088,22 +1227,36 @@ def build_action_plan(result: dict, user_situation: str) -> list[str]:
 def get_main_and_supporting_urls(result: dict) -> dict:
     supporting = []
 
+    # Plain URL lists
     supporting.extend(result["link_classification"]["external_links"])
     supporting.extend(result["js_url_classification"]["api_like_urls"])
     supporting.extend(result["js_url_classification"]["hosting_platform_js_urls"])
-    supporting.extend(result["js_url_classification"]["official_brand_js_urls"])
 
-    supporting = [
-        url for url in unique_strings(supporting, limit=30)
-        if url != result["normalised_url"] and url != result["final_url"]
-    ]
+    # official_brand_js_urls is a list of dicts, so extract the url value
+    for item in result["js_url_classification"].get("official_brand_js_urls", []):
+        if isinstance(item, dict) and item.get("url"):
+            supporting.append(item["url"])
+
+    # official_brand_links is also a list of dicts
+    for item in result["link_classification"].get("official_brand_links", []):
+        if isinstance(item, dict) and item.get("url"):
+            supporting.append(item["url"])
+
+    clean_supporting = []
+    for item in supporting:
+        if not isinstance(item, str):
+            continue
+
+        if item in {result["normalised_url"], result["final_url"]}:
+            continue
+
+        clean_supporting.append(item)
 
     return {
         "main_url": result["final_url"],
         "submitted_url": result["normalised_url"],
-        "supporting_urls": supporting,
+        "supporting_urls": unique_strings(clean_supporting, limit=30),
     }
-
 
 def build_simple_summary(result: dict, user_situation: str = "") -> str:
     brands = identify_likely_brands(result)
@@ -1817,6 +1970,10 @@ st.write(
 
 st.caption("No logins, form submissions, or intrusive scans are performed.")
 
+st.caption(
+    "A low score does not guarantee a link is safe. ScamSlyce only reports warning signs found during basic passive checks."
+)
+
 st.warning(
     "Do not submit private links, password reset links, magic login links, banking session links, "
     "internal company URLs, or any URL containing personal tokens or sensitive information."
@@ -1891,8 +2048,12 @@ if analyse_button:
                     "That does not prove abuse, but it can be relevant when combined with brand impersonation."
                 )
 
-            if result["redirect_count"] > 0:
-                summary_points.append(f"This link redirects {result['redirect_count']} time(s) before reaching the final page.")
+            if result["redirect_count"] > 0 and result["final_domain"] != result["original_domain"]:
+                summary_points.append(f"This link redirects {result['redirect_count']} time(s) before reaching a different registered domain.")
+            elif result["redirect_count"] > 0 and result["risk_level"] != "Low":
+                summary_points.append(
+                    f"This link redirects {result['redirect_count']} time(s), but remains on the same registered domain."
+                )
 
             if result["final_domain"] != result["original_domain"]:
                 summary_points.append("The final registered domain is different from the original registered domain. This can be common in scam or phishing chains.")
@@ -1941,9 +2102,10 @@ if analyse_button:
             if result["uses_http"]:
                 summary_points.append("The original link uses HTTP instead of HTTPS.")
 
-            if result["suspicious_words"]:
-                words = ", ".join(result["suspicious_words"][:10])
-                summary_points.append(f"Suspicious or scam-related wording was detected: {words}.")
+            word_categories = get_suspicious_word_categories(result)
+            if result["risk_level"] != "Low" and word_categories["strong"]:
+                words = ", ".join(word_categories["strong"][:10])
+                summary_points.append(f"Strong scam/phishing wording was detected: {words}.")
 
             if not summary_points:
                 summary_points.append("No major warning signs were detected by this basic version. This does not guarantee the link is safe.")
