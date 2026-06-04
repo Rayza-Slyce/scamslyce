@@ -134,5 +134,12 @@
     "expected_level": "Very High",
     "min_score": 70,
     "notes": "Known Meta/Facebook impersonation sample used during development."
+  },
+  {
+    "name": "Google Sites Meta phishing chain",
+    "url": "https://sites.google.com/view/badge-verify",
+    "category": "known_phishing_chain",
+    "min_overall_score": 50,
+    "notes": "Known chain pattern: Google Sites landing page leading to a higher-risk embedded destination."
   }
 ]

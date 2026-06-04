@@ -15,8 +15,18 @@ CSV_COLUMNS = [
     "expected_level",
     "min_score",
     "max_score",
+    "expected_overall_level",
+    "min_overall_score",
+    "max_overall_score",
     "actual_level",
     "actual_score",
+    "direct_level",
+    "direct_score",
+    "overall_level",
+    "overall_score",
+    "embedded_high_risk_found",
+    "embedded_highest_risk_level",
+    "embedded_highest_risk_score",
     "inspection_status",
     "inspection_notes",
     "pass",
@@ -76,10 +86,13 @@ def should_skip(test_case):
     return not url.strip() or "PASTE_YOUR_STREAMLIT_URL_HERE" in url
 
 
-def check_expectations(test_case, actual_level, actual_score):
+def check_expectations(test_case, actual_level, actual_score, overall_level, overall_score):
     expected_level = test_case.get("expected_level")
     min_score = test_case.get("min_score")
     max_score = test_case.get("max_score")
+    expected_overall_level = test_case.get("expected_overall_level")
+    min_overall_score = test_case.get("min_overall_score")
+    max_overall_score = test_case.get("max_overall_score")
 
     if expected_level and actual_level != expected_level:
         return False
@@ -88,6 +101,15 @@ def check_expectations(test_case, actual_level, actual_score):
         return False
 
     if max_score is not None and actual_score > max_score:
+        return False
+
+    if expected_overall_level and overall_level != expected_overall_level:
+        return False
+
+    if min_overall_score is not None and overall_score < min_overall_score:
+        return False
+
+    if max_overall_score is not None and overall_score > max_overall_score:
         return False
 
     return True
@@ -101,8 +123,18 @@ def run_one_test(test_case):
         "expected_level": test_case.get("expected_level", ""),
         "min_score": test_case.get("min_score", ""),
         "max_score": test_case.get("max_score", ""),
+        "expected_overall_level": test_case.get("expected_overall_level", ""),
+        "min_overall_score": test_case.get("min_overall_score", ""),
+        "max_overall_score": test_case.get("max_overall_score", ""),
         "actual_level": "",
         "actual_score": "",
+        "direct_level": "",
+        "direct_score": "",
+        "overall_level": "",
+        "overall_score": "",
+        "embedded_high_risk_found": "",
+        "embedded_highest_risk_level": "",
+        "embedded_highest_risk_score": "",
         "inspection_status": "",
         "inspection_notes": "",
         "pass": "",
@@ -121,14 +153,23 @@ def run_one_test(test_case):
         result = analyse_url(row["url"], message_text="")
         signal.alarm(0)
 
-        row["actual_level"] = result["risk_level"]
-        row["actual_score"] = result["risk_score"]
+        row["direct_level"] = result["risk_level"]
+        row["direct_score"] = result["risk_score"]
+        row["overall_level"] = result.get("overall_risk_level", result["risk_level"])
+        row["overall_score"] = result.get("overall_risk_score", result["risk_score"])
+        row["actual_level"] = row["direct_level"]
+        row["actual_score"] = row["direct_score"]
+        row["embedded_high_risk_found"] = result.get("embedded_high_risk_found", False)
+        row["embedded_highest_risk_level"] = result.get("embedded_highest_risk_level", "")
+        row["embedded_highest_risk_score"] = result.get("embedded_highest_risk_score", "")
         row["inspection_status"] = result.get("inspection_status", "")
         row["inspection_notes"] = " ".join(result.get("inspection_notes", []))
         row["pass"] = check_expectations(
             test_case,
             result["risk_level"],
             result["risk_score"],
+            row["overall_level"],
+            row["overall_score"],
         )
 
     except Exception as error:
@@ -140,7 +181,7 @@ def run_one_test(test_case):
 
 
 def format_table(rows):
-    headers = ["status", "name", "category", "expected", "actual", "score", "inspect", "error"]
+    headers = ["status", "name", "category", "expected", "direct", "overall", "embedded", "inspect", "error"]
     table_rows = []
 
     for row in rows:
@@ -158,14 +199,21 @@ def format_table(rows):
             expected_parts.append(f">={row['min_score']}")
         if row["max_score"] != "":
             expected_parts.append(f"<={row['max_score']}")
+        if row["expected_overall_level"]:
+            expected_parts.append("overall " + str(row["expected_overall_level"]))
+        if row["min_overall_score"] != "":
+            expected_parts.append(f"overall >={row['min_overall_score']}")
+        if row["max_overall_score"] != "":
+            expected_parts.append(f"overall <={row['max_overall_score']}")
 
         table_rows.append([
             status,
             row["name"],
             row["category"],
             " ".join(expected_parts),
-            str(row["actual_level"]),
-            str(row["actual_score"]),
+            f"{row['direct_level']} {row['direct_score']}",
+            f"{row['overall_level']} {row['overall_score']}",
+            str(row["embedded_high_risk_found"]),
             row["inspection_status"],
             row["error"],
         ])
@@ -217,8 +265,8 @@ def write_markdown_report(rows, markdown_results_path, input_path):
         f"Failed: {fail_count}",
         f"Skipped: {skip_count}",
         "",
-        "| Status | Name | Category | Expected Level | Min Score | Max Score | Actual Level | Actual Score | Inspection Status | Inspection Notes | Error | Notes |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Status | Name | Category | Expected Level | Min Score | Max Score | Expected Overall Level | Min Overall Score | Max Overall Score | Direct Level | Direct Score | Overall Level | Overall Score | Embedded High Risk Found | Embedded Highest Risk Level | Embedded Highest Risk Score | Inspection Status | Inspection Notes | Error | Notes |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
 
     for row in rows:
@@ -238,8 +286,16 @@ def write_markdown_report(rows, markdown_results_path, input_path):
                 markdown_escape(row["expected_level"]),
                 markdown_escape(row["min_score"]),
                 markdown_escape(row["max_score"]),
-                markdown_escape(row["actual_level"]),
-                markdown_escape(row["actual_score"]),
+                markdown_escape(row["expected_overall_level"]),
+                markdown_escape(row["min_overall_score"]),
+                markdown_escape(row["max_overall_score"]),
+                markdown_escape(row["direct_level"]),
+                markdown_escape(row["direct_score"]),
+                markdown_escape(row["overall_level"]),
+                markdown_escape(row["overall_score"]),
+                markdown_escape(row["embedded_high_risk_found"]),
+                markdown_escape(row["embedded_highest_risk_level"]),
+                markdown_escape(row["embedded_highest_risk_score"]),
                 markdown_escape(row["inspection_status"]),
                 markdown_escape(row["inspection_notes"]),
                 markdown_escape(row["error"]),

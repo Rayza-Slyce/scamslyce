@@ -1,4 +1,5 @@
 import ipaddress
+import html as html_lib
 import re
 import socket
 from urllib.parse import quote_plus, urljoin, urlparse
@@ -25,10 +26,12 @@ HOSTING_PLATFORMS = {
 
 KNOWN_SAFE_DOMAINS = {
     "google.com",
+    "google.co.uk",
     "youtube.com",
     "youtu.be",
     "github.com",
     "microsoft.com",
+    "xbox.com",
     "office.com",
     "live.com",
     "outlook.com",
@@ -44,6 +47,8 @@ KNOWN_SAFE_DOMAINS = {
     "gov.uk",
     "jdsports.co.uk",
     "streamlit.app",
+    "bbc.co.uk",
+    "bbc.com",
 }
 
 STRONG_SUSPICIOUS_WORDS = {
@@ -112,9 +117,9 @@ LEGIT_BRAND_DOMAINS = {
     "Meta/Facebook": ["meta.com", "facebook.com", "fb.com", "messenger.com"],
     "Instagram": ["instagram.com", "meta.com"],
     "PayPal": ["paypal.com", "paypal.co.uk"],
-    "Microsoft": ["microsoft.com", "live.com", "office.com", "outlook.com"],
-    "Google": ["google.com", "gmail.com", "youtube.com", "youtu.be"],
-    "Apple": ["apple.com", "icloud.com"],
+    "Microsoft": ["microsoft.com", "live.com", "office.com", "outlook.com", "xbox.com"],
+    "Google": ["google.com", "google.co.uk", "gmail.com", "youtube.com", "youtu.be"],
+    "Apple": ["apple.com", "icloud.com", "applecard.apple"],
     "Amazon": ["amazon.com", "amazon.co.uk"],
     "HMRC/GOV.UK": ["gov.uk"],
 }
@@ -293,6 +298,90 @@ STRONG_JS_ENDPOINT_MARKERS = {
     "m.me/",
 }
 
+EMBEDDED_LINK_ACTION_WORDS = {
+    "continue",
+    "login",
+    "log in",
+    "get verified",
+    "verify",
+    "appeal",
+    "confirm",
+    "secure",
+    "review",
+    "open",
+    "start",
+    "proceed",
+}
+
+EMBEDDED_LINK_INTENT_WORDS = {
+    "login",
+    "verify",
+    "verification",
+    "appeal",
+    "security",
+    "account",
+    "business",
+    "support",
+    "copyright",
+    "reset",
+    "recover",
+    "unlock",
+    "qr",
+    "qr-session",
+    "session",
+    "auth",
+}
+
+LOW_VALUE_LINK_TERMS = {
+    "privacy",
+    "terms",
+    "cookie",
+    "cookies",
+    "legal",
+    "policy",
+    "help",
+    "docs",
+    "documentation",
+    "schema.org",
+    "w3.org",
+}
+
+STATIC_RESOURCE_EXTENSIONS = {
+    ".css",
+    ".js",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".webp",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".map",
+}
+
+ANALYTICS_OR_STATIC_HOST_TERMS = {
+    "analytics",
+    "googletagmanager",
+    "google-analytics",
+    "doubleclick",
+    "stats",
+    "tracking",
+    "cdn",
+    "static",
+    "assets",
+}
+
+LOW_VALUE_HOSTS = {
+    "schema.org",
+    "www.schema.org",
+    "w3.org",
+    "www.w3.org",
+    "s.w.org",
+}
+
 URL_REGEX = re.compile(r"""https?://[^\s"'<>\\)]+""", re.IGNORECASE)
 
 MAX_EXTERNAL_JS_FILES = 5
@@ -407,7 +496,7 @@ def is_expected_brand_relationship(registered_domain: str, brand: str) -> bool:
         "Google": {"youtube.com", "youtu.be", "google.com", "gmail.com"},
         "Meta/Facebook": {"facebook.com", "fb.com", "messenger.com", "meta.com", "instagram.com"},
         "Instagram": {"instagram.com", "facebook.com", "meta.com"},
-        "Microsoft": {"microsoft.com", "office.com", "outlook.com", "live.com"},
+        "Microsoft": {"microsoft.com", "office.com", "outlook.com", "live.com", "xbox.com"},
     }
 
     trusted_domains = trusted_relationships.get(brand, set())
@@ -428,12 +517,13 @@ def domains_share_known_organisation(domain_a: str, domain_b: str) -> bool:
             return True
 
     trusted_groups = [
-        {"google.com", "gmail.com", "youtube.com", "youtu.be"},
+        {"google.com", "google.co.uk", "gmail.com", "youtube.com", "youtu.be"},
         {"facebook.com", "fb.com", "messenger.com", "meta.com", "instagram.com"},
-        {"microsoft.com", "office.com", "outlook.com", "live.com"},
+        {"microsoft.com", "office.com", "outlook.com", "live.com", "xbox.com"},
         {"paypal.com", "paypal.co.uk"},
         {"amazon.com", "amazon.co.uk"},
-        {"apple.com", "icloud.com"},
+        {"apple.com", "icloud.com", "applecard.apple"},
+        {"bbc.co.uk", "bbc.com"},
     ]
 
     return any(domain_a in group and domain_b in group for group in trusted_groups)
@@ -785,15 +875,30 @@ def unique_dicts_by_url(items: list[dict], limit: int = 50) -> list[dict]:
     return results[:limit]
 
 
+def clean_extracted_url(url: str) -> str:
+    for marker in ["&quot;", "&#34;", "&apos;", "&#39;", "&lt;", "&gt;"]:
+        if marker in url:
+            url = url.split(marker, 1)[0]
+
+    return url.rstrip(".,;]")
+
+
 # -----------------------------
 # JavaScript analysis
 # -----------------------------
 
 def analyse_javascript_text(js_text: str) -> dict:
-    js_urls = unique_strings(URL_REGEX.findall(js_text), limit=80)
+    normalised_js_text = html_lib.unescape(js_text).replace("\\/", "/")
+    js_urls = unique_strings(
+        [
+            clean_extracted_url(url)
+            for url in URL_REGEX.findall(js_text) + URL_REGEX.findall(normalised_js_text)
+        ],
+        limit=80,
+    )
 
     found_terms = []
-    lower_js = js_text.lower()
+    lower_js = normalised_js_text.lower()
 
     for term in SUSPICIOUS_JS_TERMS:
         if term.lower() in lower_js:
@@ -1258,6 +1363,368 @@ def has_hard_danger_indicator(result: dict) -> bool:
     )
 
 
+def is_static_resource_url(url: str) -> bool:
+    path = urlparse(url).path.lower()
+    return any(path.endswith(extension) for extension in STATIC_RESOURCE_EXTENSIONS)
+
+
+def is_low_value_embedded_url(url: str, link_text: str = "") -> bool:
+    lower_url = url.lower()
+    lower_text = link_text.lower()
+    hostname = get_hostname(url)
+
+    if hostname in LOW_VALUE_HOSTS:
+        return True
+
+    if hostname.endswith(".github.io"):
+        has_intent = any(word in lower_url or word in lower_text for word in EMBEDDED_LINK_INTENT_WORDS)
+        has_endpoint = any(marker in lower_url for marker in STRONG_JS_ENDPOINT_MARKERS)
+        if not has_intent and not has_endpoint:
+            return True
+
+    if is_static_resource_url(url):
+        return True
+
+    if any(term in hostname for term in ANALYTICS_OR_STATIC_HOST_TERMS):
+        return not any(marker in lower_url for marker in STRONG_JS_ENDPOINT_MARKERS)
+
+    if any(term in lower_url or term in lower_text for term in LOW_VALUE_LINK_TERMS):
+        return not any(
+            word in lower_url or word in lower_text
+            for word in EMBEDDED_LINK_INTENT_WORDS
+        )
+
+    social_domains = {
+        "facebook.com",
+        "instagram.com",
+        "x.com",
+        "twitter.com",
+        "linkedin.com",
+        "youtube.com",
+        "youtu.be",
+        "tiktok.com",
+    }
+    registered_domain = get_registered_domain(url)
+    if registered_domain in social_domains:
+        return not any(
+            word in lower_url or word in lower_text
+            for word in EMBEDDED_LINK_INTENT_WORDS
+        )
+
+    return False
+
+
+def collect_embedded_link_candidates(result: dict) -> list[dict]:
+    candidates = []
+
+    for item in result["embedded_links"]["anchors"]:
+        candidates.append({
+            "url": item["url"],
+            "source": "anchor",
+            "link_text": item.get("label", ""),
+        })
+
+    for form_url in result["embedded_links"]["forms"]:
+        candidates.append({
+            "url": form_url,
+            "source": "form_action",
+            "link_text": "",
+        })
+
+    for iframe_url in result["embedded_links"]["iframes"]:
+        candidates.append({
+            "url": iframe_url,
+            "source": "iframe",
+            "link_text": "",
+        })
+
+    for api_url in result["js_url_classification"]["api_like_urls"]:
+        candidates.append({
+            "url": api_url,
+            "source": "api_like_url",
+            "link_text": "",
+        })
+
+    for hosted_url in result["js_url_classification"]["hosting_platform_js_urls"]:
+        candidates.append({
+            "url": hosted_url,
+            "source": "hosted_platform_url",
+            "link_text": "",
+        })
+
+    for strong_url in result["js_url_classification"].get("strong_endpoint_urls", []):
+        candidates.append({
+            "url": strong_url,
+            "source": "strong_endpoint_url",
+            "link_text": "",
+        })
+
+    unique_candidates = []
+    seen = set()
+    for candidate in candidates:
+        url = candidate.get("url", "")
+
+        if not url.startswith(("http://", "https://")):
+            continue
+
+        if url in {result["normalised_url"], result["final_url"]}:
+            continue
+
+        if is_private_or_local_host(get_hostname(url)):
+            continue
+
+        key = url.rstrip("/")
+        if key in seen:
+            continue
+
+        seen.add(key)
+        candidate["registered_domain"] = get_registered_domain(url)
+        unique_candidates.append(candidate)
+
+    return unique_candidates
+
+
+def score_embedded_link_candidate(candidate: dict, parent_result: dict) -> dict:
+    url = candidate["url"]
+    link_text = candidate.get("link_text", "")
+    registered_domain = candidate["registered_domain"]
+    parent_domain = parent_result["final_domain"]
+    lower_url = url.lower()
+    lower_text = link_text.lower()
+    hostname = get_hostname(url)
+    score = 0
+    reasons = []
+
+    strong_endpoint = any(marker in lower_url for marker in STRONG_JS_ENDPOINT_MARKERS)
+
+    if is_low_value_embedded_url(url, link_text) and not strong_endpoint:
+        candidate["selection_score"] = 0
+        candidate["reason_selected"] = "Low-value static, policy, analytics, or social/profile link."
+        return candidate
+
+    same_organisation = domains_share_known_organisation(registered_domain, parent_domain)
+
+    if registered_domain != parent_domain and not same_organisation:
+        score += 25
+        reasons.append("different registered domain from submitted page")
+
+    if is_hosting_platform(registered_domain):
+        score += 25
+        reasons.append("hosted on a general-purpose platform")
+
+    if any(word in lower_url or word in hostname for word in EMBEDDED_LINK_INTENT_WORDS):
+        score += 15
+        reasons.append("URL contains login, verification, account, session, or support intent")
+
+    if any(action in lower_text for action in EMBEDDED_LINK_ACTION_WORDS):
+        score += 15
+        reasons.append("link text is an action prompt")
+
+    parent_brands = identify_likely_brands(parent_result)
+    for brand in parent_brands:
+        if not is_legit_brand_domain(registered_domain, brand) and not is_expected_brand_relationship(registered_domain, brand):
+            score += 20
+            reasons.append(f"parent page references {brand}, but destination is not an official related domain")
+            break
+
+    if candidate["source"] == "form_action" and registered_domain != parent_domain:
+        score += 20
+        reasons.append("form action submits to a different registered domain")
+
+    if strong_endpoint:
+        score += 25
+        reasons.append("URL contains strong JavaScript endpoint/session/messaging indicators")
+
+    if registered_domain in KNOWN_SHORTENERS:
+        score += 20
+        reasons.append("destination uses a known URL shortener")
+
+    if detect_punycode_hostname(hostname)["detected"]:
+        score += 20
+        reasons.append("destination hostname contains punycode labels")
+
+    if detect_brand_digit_lookalikes(registered_domain):
+        score += 20
+        reasons.append("destination resembles a known brand using digit substitution")
+
+    if same_organisation and not strong_endpoint:
+        candidate["selection_score"] = 0
+        candidate["reason_selected"] = "Same-organisation navigation or resource link."
+        return candidate
+
+    candidate["selection_score"] = score
+    candidate["reason_selected"] = "; ".join(unique_strings(reasons, limit=8)) or "No strong embedded-link selection reason."
+    return candidate
+
+
+def select_embedded_links_for_analysis(result: dict, max_links: int = 3) -> list[dict]:
+    scored = [
+        score_embedded_link_candidate(candidate, result)
+        for candidate in collect_embedded_link_candidates(result)
+    ]
+
+    selected = [
+        candidate for candidate in scored
+        if candidate["selection_score"] >= 25
+    ]
+
+    selected.sort(
+        key=lambda item: (
+            item["selection_score"],
+            item["source"] in {"form_action", "anchor"},
+        ),
+        reverse=True,
+    )
+
+    return selected[:max_links]
+
+
+def describe_main_concern(result: dict) -> str:
+    if result["brand_impersonation"] and result["qr_session_pattern_detected"]:
+        return "Brand impersonation with QR/session login behaviour"
+    if result["brand_impersonation"]:
+        return "Possible brand impersonation"
+    if result["qr_session_pattern_detected"]:
+        return "Possible QR/session login behaviour"
+    if result["js_url_classification"]["strong_endpoint_urls"]:
+        return "Strong JavaScript endpoint/session indicators"
+    if result["js_url_classification"]["api_like_urls"]:
+        return "API/session-like JavaScript URLs"
+    if result["forms"]["password_field_detected"]:
+        return "Password field detected"
+    return "No major concern detected"
+
+
+def summarise_embedded_result(candidate: dict, result: dict) -> dict:
+    brands = identify_likely_brands(result)
+    high_risk_js_terms = get_high_risk_js_terms(result)
+    api_like_urls = result["js_url_classification"]["api_like_urls"]
+    hosting_platform_js_urls = result["js_url_classification"]["hosting_platform_js_urls"]
+
+    return {
+        "url": candidate["url"],
+        "source": candidate["source"],
+        "link_text": candidate.get("link_text", ""),
+        "registered_domain": candidate["registered_domain"],
+        "reason_selected": candidate["reason_selected"],
+        "selection_score": candidate["selection_score"],
+        "risk_score": result["risk_score"],
+        "risk_level": result["risk_level"],
+        "page_title": result["page_title"],
+        "final_url": result["final_url"],
+        "original_domain": result["original_domain"],
+        "final_domain": result["final_domain"],
+        "hostname": result["hostname"],
+        "subdomain": result["subdomain"],
+        "http_status": result["status_code"],
+        "content_type": result["content_type"],
+        "inspection_status": result["inspection_status"],
+        "inspection_notes": result["inspection_notes"],
+        "main_concern": describe_main_concern(result),
+        "brand_impersonation": result["brand_impersonation"],
+        "likely_brands": brands,
+        "hosted_platform_detected": result["hosted_platform_detected"],
+        "forms_summary": {
+            "form_count": result["forms"]["form_count"],
+            "input_count": result["forms"]["input_count"],
+            "password_field_detected": result["forms"]["password_field_detected"],
+            "sensitive_input_count": len(result["forms"].get("sensitive_input_fields", [])),
+        },
+        "high_risk_js_terms": high_risk_js_terms,
+        "suspicious_js_terms": result["js_analysis"]["suspicious_js_terms"][:20],
+        "api_like_urls_count": len(api_like_urls),
+        "api_like_urls_sample": api_like_urls[:5],
+        "hosting_platform_js_urls_count": len(hosting_platform_js_urls),
+        "hosting_platform_js_urls_sample": hosting_platform_js_urls[:5],
+        "qr_session_pattern_detected": result["qr_session_pattern_detected"],
+        "overall_risk_score": result.get("overall_risk_score", result["risk_score"]),
+        "overall_risk_level": result.get("overall_risk_level", result["risk_level"]),
+        "error": "",
+    }
+
+
+def analyse_embedded_links(parent_result: dict, max_links: int = 3) -> list[dict]:
+    embedded_results = []
+
+    for candidate in select_embedded_links_for_analysis(parent_result, max_links=max_links):
+        try:
+            embedded_result = analyse_url(
+                candidate["url"],
+                message_text=parent_result.get("message_text", ""),
+                analyse_embedded=False,
+                depth=1,
+            )
+            embedded_results.append(summarise_embedded_result(candidate, embedded_result))
+        except Exception as error:
+            embedded_results.append({
+                "url": candidate["url"],
+                "source": candidate["source"],
+                "link_text": candidate.get("link_text", ""),
+                "registered_domain": candidate["registered_domain"],
+                "reason_selected": candidate["reason_selected"],
+                "selection_score": candidate["selection_score"],
+                "risk_score": "",
+                "risk_level": "",
+                "page_title": "",
+                "final_url": "",
+                "original_domain": "",
+                "final_domain": "",
+                "hostname": "",
+                "subdomain": "",
+                "http_status": "",
+                "content_type": "",
+                "inspection_status": "inconclusive",
+                "inspection_notes": ["Embedded destination analysis failed."],
+                "main_concern": "",
+                "brand_impersonation": [],
+                "likely_brands": [],
+                "hosted_platform_detected": False,
+                "forms_summary": {},
+                "high_risk_js_terms": [],
+                "suspicious_js_terms": [],
+                "api_like_urls_count": 0,
+                "api_like_urls_sample": [],
+                "hosting_platform_js_urls_count": 0,
+                "hosting_platform_js_urls_sample": [],
+                "qr_session_pattern_detected": False,
+                "overall_risk_score": "",
+                "overall_risk_level": "",
+                "error": str(error),
+            })
+
+    return embedded_results
+
+
+def apply_overall_risk_from_embedded(result: dict) -> dict:
+    embedded_results = result.get("embedded_analysis", [])
+    scored_results = [
+        item for item in embedded_results
+        if isinstance(item.get("risk_score"), int)
+    ]
+
+    highest = max(scored_results, key=lambda item: item["risk_score"], default=None)
+
+    result["embedded_highest_risk_score"] = highest["risk_score"] if highest else 0
+    result["embedded_highest_risk_level"] = highest["risk_level"] if highest else ""
+    result["embedded_high_risk_found"] = bool(
+        highest and highest["risk_level"] in {"High", "Very High"}
+    )
+
+    result["overall_risk_score"] = result["risk_score"]
+    result["overall_risk_level"] = result["risk_level"]
+    result["overall_risk_reason"] = "Overall risk is based on the submitted URL's direct analysis."
+
+    if result["embedded_high_risk_found"]:
+        result["overall_risk_score"] = max(result["risk_score"], highest["risk_score"])
+        result["overall_risk_level"] = highest["risk_level"]
+        result["overall_risk_reason"] = (
+            "The submitted URL contains or leads to an embedded destination "
+            f"that scored {highest['risk_level']} ({highest['risk_score']}/100)."
+        )
+
+    return result
+
+
 # -----------------------------
 # Scoring
 # -----------------------------
@@ -1392,7 +1859,7 @@ def score_result(findings: dict) -> tuple[int, str]:
 # Main analysis
 # -----------------------------
 
-def analyse_url(raw_url: str, message_text: str = "") -> dict:
+def analyse_url(raw_url: str, message_text: str = "", analyse_embedded: bool = True, depth: int = 0) -> dict:
     url = normalise_url(raw_url)
     parsed = urlparse(url)
 
@@ -1424,6 +1891,8 @@ def analyse_url(raw_url: str, message_text: str = "") -> dict:
     embedded_links = extract_embedded_links(html, final_url)
 
     inline_js = extract_inline_js(html)
+    if html:
+        inline_js += "\n" + html
     inline_js_analysis = analyse_javascript_text(inline_js)
 
     external_js_analysis = fetch_and_analyse_external_js(
@@ -1480,6 +1949,12 @@ def analyse_url(raw_url: str, message_text: str = "") -> dict:
     score, level = score_result(findings)
     findings["risk_score"] = score
     findings["risk_level"] = level
+    findings["embedded_analysis"] = []
+
+    if analyse_embedded and depth == 0:
+        findings["embedded_analysis"] = analyse_embedded_links(findings, max_links=3)
+
+    apply_overall_risk_from_embedded(findings)
 
     return findings
 
@@ -1494,6 +1969,19 @@ def identify_likely_brands(result: dict) -> list[str]:
 
 def build_action_plan(result: dict, user_situation: str) -> list[str]:
     low_risk = result["risk_level"] == "Low"
+
+    if result.get("embedded_high_risk_found"):
+        highest = get_highest_risk_embedded_result(result)
+        destination = highest.get("final_url") or highest["url"] if highest else "the embedded destination"
+        actions = [
+            f"Do not follow the embedded destination: {destination}",
+            "Treat the link chain as risky even if the submitted page itself looks mild.",
+            "Do not enter login details, payment information, personal data, or scan QR codes on the embedded destination.",
+            "Use the official website or app directly if you need to check the account, page, or offer.",
+            "Report the embedded destination as the primary suspicious URL.",
+            "Optionally report the landing page to its hosting/platform provider as a page that leads to a phishing destination.",
+        ]
+        return actions
 
     if low_risk:
         if result.get("inspection_status") in {"limited", "inconclusive"}:
@@ -1593,43 +2081,168 @@ def build_action_plan(result: dict, user_situation: str) -> list[str]:
 
     return actions
 
+def get_highest_risk_embedded_result(result: dict) -> dict | None:
+    scored = [
+        item for item in result.get("embedded_analysis", [])
+        if isinstance(item.get("risk_score"), int)
+    ]
+
+    return max(scored, key=lambda item: item["risk_score"], default=None)
+
+
+def get_primary_report_context(result: dict) -> dict:
+    highest_embedded = get_highest_risk_embedded_result(result)
+    direct_high = result["risk_level"] in {"High", "Very High"}
+    embedded_high = bool(highest_embedded and highest_embedded["risk_level"] in {"High", "Very High"})
+
+    if embedded_high and not direct_high:
+        primary_url = highest_embedded.get("final_url") or highest_embedded["url"]
+        primary_type = "embedded_destination"
+        supporting_urls = [
+            result["final_url"],
+            result["normalised_url"],
+        ]
+        primary_title = "high-risk embedded destination"
+        reason = (
+            "The submitted landing page scored lower directly, but it contains or leads to "
+            "an embedded destination that shows strong phishing/scam indicators."
+        )
+    else:
+        primary_url = result["final_url"]
+        primary_type = "submitted_url"
+        supporting_urls = []
+        primary_title = "submitted URL"
+        reason = "The submitted URL itself has the strongest direct evidence."
+
+    return {
+        "primary_report_url": primary_url,
+        "primary_report_type": primary_type,
+        "primary_report_title": primary_title,
+        "primary_report_reason": reason,
+        "highest_embedded": highest_embedded,
+        "supporting_report_urls": unique_strings(supporting_urls, limit=30),
+    }
+
+
 def get_main_and_supporting_urls(result: dict) -> dict:
+    report_context = get_primary_report_context(result)
     supporting = []
 
-    # Plain URL lists
-    supporting.extend(result["link_classification"]["external_links"])
-    supporting.extend(result["js_url_classification"]["api_like_urls"])
-    supporting.extend(result["js_url_classification"]["hosting_platform_js_urls"])
+    if report_context["primary_report_type"] == "embedded_destination":
+        supporting.extend(report_context["supporting_report_urls"])
+        highest = report_context["highest_embedded"]
+        if highest:
+            supporting.extend(highest.get("api_like_urls_sample", []))
+            supporting.extend(highest.get("hosting_platform_js_urls_sample", []))
+    else:
+        # Plain URL lists
+        supporting.extend(result["link_classification"]["external_links"])
+        supporting.extend(result["js_url_classification"]["api_like_urls"])
+        supporting.extend(result["js_url_classification"]["hosting_platform_js_urls"])
 
-    # official_brand_js_urls is a list of dicts, so extract the url value
-    for item in result["js_url_classification"].get("official_brand_js_urls", []):
-        if isinstance(item, dict) and item.get("url"):
-            supporting.append(item["url"])
+        # official_brand_js_urls is a list of dicts, so extract the url value
+        for item in result["js_url_classification"].get("official_brand_js_urls", []):
+            if isinstance(item, dict) and item.get("url"):
+                supporting.append(item["url"])
 
-    # official_brand_links is also a list of dicts
-    for item in result["link_classification"].get("official_brand_links", []):
-        if isinstance(item, dict) and item.get("url"):
-            supporting.append(item["url"])
+        # official_brand_links is also a list of dicts
+        for item in result["link_classification"].get("official_brand_links", []):
+            if isinstance(item, dict) and item.get("url"):
+                supporting.append(item["url"])
+
+        supporting.extend(report_context["supporting_report_urls"])
 
     clean_supporting = []
     for item in supporting:
         if not isinstance(item, str):
             continue
 
-        if item in {result["normalised_url"], result["final_url"]}:
+        if item == report_context["primary_report_url"]:
             continue
 
         clean_supporting.append(item)
 
     return {
-        "main_url": result["final_url"],
+        "main_url": report_context["primary_report_url"],
         "submitted_url": result["normalised_url"],
         "supporting_urls": unique_strings(clean_supporting, limit=30),
+        "primary_report_type": report_context["primary_report_type"],
+        "primary_report_reason": report_context["primary_report_reason"],
     }
+
+
+def format_forms_summary(forms_summary: dict) -> str:
+    if not forms_summary:
+        return "Not available"
+
+    return (
+        f"{forms_summary.get('form_count', 0)} form(s), "
+        f"{forms_summary.get('input_count', 0)} input(s), "
+        f"password field detected: {forms_summary.get('password_field_detected', False)}, "
+        f"sensitive input indicators: {forms_summary.get('sensitive_input_count', 0)}"
+    )
+
+
+def format_embedded_destination_evidence(embedded: dict | None) -> str:
+    if not embedded:
+        return "No embedded destination evidence available."
+
+    brands = ", ".join(embedded.get("likely_brands", [])) or "None detected"
+    high_risk_terms = ", ".join(embedded.get("high_risk_js_terms", [])) or "None detected"
+    api_sample = embedded.get("api_like_urls_sample", [])
+    api_text = "None detected"
+    if api_sample:
+        api_text = "\n".join(f"  - {url}" for url in api_sample)
+
+    hosted_platform = embedded.get("final_domain") if embedded.get("hosted_platform_detected") else "No"
+
+    return f"""- Page title: {embedded.get('page_title') or 'Not detected'}
+- Registered domain: {embedded.get('final_domain') or 'Not available'}
+- Hostname: {embedded.get('hostname') or 'Not available'}
+- Subdomain: {embedded.get('subdomain') or 'None'}
+- HTTP status: {embedded.get('http_status') or 'Not available'}
+- Content-Type: {embedded.get('content_type') or 'Unknown'}
+- Inspection status: {embedded.get('inspection_status') or 'unknown'}
+- Possible brand impersonation: {brands}
+- Hosted platform detected: {hosted_platform}
+- QR/session behaviour detected: {embedded.get('qr_session_pattern_detected', False)}
+- API/session-like JavaScript URLs found: {embedded.get('api_like_urls_count', 0)}
+{api_text}
+- High-risk JavaScript/session indicators: {high_risk_terms}
+- Forms/inputs summary: {format_forms_summary(embedded.get('forms_summary', {}))}
+- Main concern: {embedded.get('main_concern') or 'Not available'}"""
+
+
+def format_landing_page_supporting_evidence(result: dict, embedded: dict | None) -> str:
+    reason = embedded.get("reason_selected") if embedded else "Not available"
+    return f"""- Submitted URL: {result['normalised_url']}
+- Landing page final URL: {result['final_url']}
+- Landing page title: {result['page_title'] or 'Not detected'}
+- Landing page registered domain: {result['final_domain']}
+- Landing page direct risk: {result['risk_level']} ({result['risk_score']}/100)
+- The landing page linked to the suspicious embedded destination.
+- Reason embedded destination was selected: {reason}"""
+
 
 def build_simple_summary(result: dict, user_situation: str = "") -> str:
     brands = identify_likely_brands(result)
     brand_text = ", ".join(brands) if brands else "a known brand or service"
+
+    if result.get("embedded_high_risk_found"):
+        highest = get_highest_risk_embedded_result(result)
+        destination = highest.get("final_url") or highest["url"] if highest else "the embedded destination"
+        destination_domain = get_registered_domain(destination) if highest else "unknown domain"
+        return (
+            f"The submitted page itself scored {result['risk_level']}, but it links to an embedded destination "
+            f"that scored {highest['risk_level']}.\n\n"
+            f"Embedded destination: {destination}\n"
+            f"Embedded destination domain: {destination_domain}\n\n"
+            f"Direct submitted-page risk: {result['risk_level']} ({result['risk_score']}/100).\n"
+            f"Embedded destination risk: {highest['risk_level']} ({highest['risk_score']}/100).\n"
+            f"Overall chain risk: {result.get('overall_risk_level', result['risk_level'])} "
+            f"({result.get('overall_risk_score', result['risk_score'])}/100).\n\n"
+            "The evidence mainly shows that the landing page leads users to a higher-risk destination."
+        )
 
     if result["risk_level"] == "Low":
         if result.get("inspection_status") in {"limited", "inconclusive"}:
@@ -1712,8 +2325,67 @@ def build_simple_summary(result: dict, user_situation: str = "") -> str:
 
     return summary
 
+
+def build_chain_abuse_report(result: dict, user_situation: str) -> str:
+    report_context = get_primary_report_context(result)
+    embedded = report_context["highest_embedded"]
+    primary_url = report_context["primary_report_url"]
+    supporting_text = "\n".join(
+        f"- {url}" for url in get_main_and_supporting_urls(result)["supporting_urls"][:15]
+    ) or "None detected"
+
+    embedded_risk = "None selected"
+    if embedded:
+        embedded_risk = f"{embedded['risk_level']} ({embedded['risk_score']}/100)"
+
+    return f"""Hello,
+
+I am reporting a suspected scam/phishing/brand impersonation destination found through a landing page.
+
+Primary suspicious URL:
+{primary_url}
+
+Primary report target type:
+High-risk embedded destination
+
+Submitted landing page:
+{result['normalised_url']}
+
+Reason for report:
+The submitted landing page contains or leads to an embedded destination that shows strong phishing/scam indicators.
+
+Risk level from ScamSlyce:
+Submitted page direct risk: {result['risk_level']} ({result['risk_score']}/100)
+Embedded destination risk: {embedded_risk}
+Overall chain concern: {result.get('overall_risk_level', result['risk_level'])} ({result.get('overall_risk_score', result['risk_score'])}/100)
+
+Embedded destination evidence:
+{format_embedded_destination_evidence(embedded)}
+
+Landing page/supporting evidence:
+{format_landing_page_supporting_evidence(result, embedded)}
+
+Supporting URLs:
+{supporting_text}
+
+User situation:
+{user_situation}
+
+Recommended action:
+Please review and, if confirmed abusive, suspend/remove/mitigate the primary suspicious URL and associated infrastructure.
+
+Passive inspection note:
+This report is based on passive inspection only. No login attempts, form submissions, brute forcing, vulnerability scanning, directory fuzzing, port scanning, or bypass activity were performed.
+"""
+
+
 def build_targeted_abuse_report(result: dict, user_situation: str, target_name: str = "abuse team") -> str:
     url_context = get_main_and_supporting_urls(result)
+    report_context = get_primary_report_context(result)
+
+    if report_context["primary_report_type"] == "embedded_destination":
+        return build_chain_abuse_report(result, user_situation)
+
     brands = identify_likely_brands(result)
     brand_text = ", ".join(brands) if brands else "Not clearly identified"
 
@@ -1735,6 +2407,22 @@ def build_targeted_abuse_report(result: dict, user_situation: str, target_name: 
     inspection_notes = "None"
     if result.get("inspection_notes"):
         inspection_notes = "\n".join(f"- {note}" for note in result["inspection_notes"])
+
+    embedded_text = "None selected for depth-1 analysis"
+    if result.get("embedded_analysis"):
+        embedded_lines = []
+        for item in result["embedded_analysis"]:
+            embedded_lines.append(
+                f"- URL: {item['url']}\n"
+                f"  Final URL: {item.get('final_url') or 'Not available'}\n"
+                f"  Source: {item['source']}\n"
+                f"  Selection reason: {item['reason_selected']}\n"
+                f"  Selection score: {item['selection_score']}\n"
+                f"  Risk: {item.get('risk_level') or 'Not available'} ({item.get('risk_score') or 'N/A'}/100)\n"
+                f"  Inspection status: {item.get('inspection_status') or 'unknown'}\n"
+                f"  Main concern: {item.get('main_concern') or item.get('error') or 'Not available'}"
+            )
+        embedded_text = "\n".join(embedded_lines)
 
     reasons = []
 
@@ -1764,6 +2452,11 @@ def build_targeted_abuse_report(result: dict, user_situation: str, target_name: 
             "Suspicious JavaScript/session indicators were detected."
         )
 
+    if result.get("embedded_high_risk_found"):
+        reasons.append(
+            "The submitted URL contains or leads to an embedded destination that shows strong phishing/scam indicators."
+        )
+
     if not reasons:
         reasons.append("The URL was flagged by the reporter as suspicious and has been passively inspected.")
 
@@ -1774,11 +2467,20 @@ def build_targeted_abuse_report(result: dict, user_situation: str, target_name: 
 Main suspicious URL:
 {url_context['main_url']}
 
-Submitted URL:
+Primary report target:
+{report_context['primary_report_title']}
+
+Submitted landing page URL:
 {url_context['submitted_url']}
 
+Primary suspicious embedded destination URL:
+{report_context['primary_report_url'] if report_context['primary_report_type'] == 'embedded_destination' else 'Not applicable'}
+
 Risk level from ScamSlyce:
-{result['risk_level']} ({result['risk_score']}/100)
+Direct submitted URL: {result['risk_level']} ({result['risk_score']}/100)
+Embedded destination risk: {report_context['highest_embedded']['risk_level'] + ' (' + str(report_context['highest_embedded']['risk_score']) + '/100)' if report_context['highest_embedded'] else 'None selected'}
+Overall chain concern: {result.get('overall_risk_level', result['risk_level'])} ({result.get('overall_risk_score', result['risk_score'])}/100)
+Overall reason: {result.get('overall_risk_reason', 'Overall risk is based on the submitted URL direct analysis.')}
 
 Suspected impersonated brand:
 {brand_text}
@@ -1811,6 +2513,9 @@ Technical indicators:
 Inspection notes:
 {inspection_notes}
 
+Embedded destinations analysed:
+{embedded_text}
+
 Suspicious JavaScript/session terms:
 {js_terms}
 
@@ -1821,7 +2526,7 @@ Supporting infrastructure / URLs found:
 {supporting_text}
 
 Requested action:
-Please review this URL and associated infrastructure. If confirmed malicious or abusive, please suspend, remove, block, or otherwise mitigate the content.
+Please review the primary report target and associated supporting infrastructure. If confirmed malicious or abusive, please suspend, remove, block, or otherwise mitigate the content.
 
 Passive inspection note:
 This report is based on passive inspection only. No login attempts, form submissions, brute forcing, vulnerability scanning, directory fuzzing, port scanning, or bypass activity were performed.
@@ -1830,6 +2535,11 @@ This report is based on passive inspection only. No login attempts, form submiss
 
 def build_email_body(result: dict, user_situation: str, focus: str = "general") -> str:
     url_context = get_main_and_supporting_urls(result)
+    report_context = get_primary_report_context(result)
+
+    if report_context["primary_report_type"] == "embedded_destination":
+        return build_chain_abuse_report(result, user_situation)
+
     summary = build_simple_summary(result, user_situation)
 
     supporting_text = "None detected"
@@ -1839,6 +2549,20 @@ def build_email_body(result: dict, user_situation: str, focus: str = "general") 
     inspection_notes = "None"
     if result.get("inspection_notes"):
         inspection_notes = "\n".join(f"- {note}" for note in result["inspection_notes"])
+
+    embedded_text = "None selected for depth-1 analysis"
+    if result.get("embedded_analysis"):
+        embedded_lines = []
+        for item in result["embedded_analysis"]:
+            embedded_lines.append(
+                f"- URL: {item['url']}\n"
+                f"  Final URL: {item.get('final_url') or 'Not available'}\n"
+                f"  Source: {item['source']}\n"
+                f"  Selection reason: {item['reason_selected']}\n"
+                f"  Risk: {item.get('risk_level') or 'Not available'} ({item.get('risk_score') or 'N/A'}/100)\n"
+                f"  Inspection status: {item.get('inspection_status') or 'unknown'}"
+            )
+        embedded_text = "\n".join(embedded_lines)
 
     indicators = []
 
@@ -1864,6 +2588,9 @@ def build_email_body(result: dict, user_situation: str, focus: str = "general") 
     if result["qr_session_pattern_detected"]:
         indicators.append("Possible QR/session-based login flow detected")
 
+    if result.get("embedded_high_risk_found"):
+        indicators.append("A linked embedded destination scored High or Very High")
+
     indicator_text = "\n".join(f"- {item}" for item in indicators) if indicators else "- No major indicators detected by basic analysis"
 
     body = f"""Hello,
@@ -1873,11 +2600,20 @@ I am reporting a suspected scam/phishing/brand impersonation page.
 Main suspicious URL:
 {url_context['main_url']}
 
-Submitted URL:
+Primary report target:
+{report_context['primary_report_title']}
+
+Submitted landing page URL:
 {url_context['submitted_url']}
 
+Primary suspicious embedded destination URL:
+{report_context['primary_report_url'] if report_context['primary_report_type'] == 'embedded_destination' else 'Not applicable'}
+
 Risk level from ScamSlyce:
-{result['risk_level']} ({result['risk_score']}/100)
+Direct submitted URL: {result['risk_level']} ({result['risk_score']}/100)
+Embedded destination risk: {report_context['highest_embedded']['risk_level'] + ' (' + str(report_context['highest_embedded']['risk_score']) + '/100)' if report_context['highest_embedded'] else 'None selected'}
+Overall chain concern: {result.get('overall_risk_level', result['risk_level'])} ({result.get('overall_risk_score', result['risk_score'])}/100)
+Overall reason: {result.get('overall_risk_reason', 'Overall risk is based on the submitted URL direct analysis.')}
 
 Page title:
 {result['page_title'] or 'Not detected'}
@@ -1914,6 +2650,9 @@ Technical evidence:
 Inspection notes:
 {inspection_notes}
 
+Embedded destinations analysed:
+{embedded_text}
+
 This report is based on passive inspection only. No login attempts, form submissions, brute forcing, vulnerability scanning, directory fuzzing, port scanning, or bypass activity were performed.
 
 Regards
@@ -1935,14 +2674,25 @@ def build_mailto(to_email: str, subject: str, body: str) -> str:
 
 def build_priority_reporting_actions(result: dict, user_situation: str) -> list[dict]:
     url_context = get_main_and_supporting_urls(result)
+    report_context = get_primary_report_context(result)
     main_url = url_context["main_url"]
     actions = []
 
     netcraft_body = build_email_body(result, user_situation, focus="netcraft")
+    netcraft_title = "Report the main suspicious URL to Netcraft"
+    netcraft_why = "Good first reporting route for phishing, malware, fake shops, and suspicious URLs. Report the main page first and include supporting infrastructure as evidence."
+
+    if report_context["primary_report_type"] == "embedded_destination":
+        netcraft_title = "Report the high-risk embedded destination to Netcraft"
+        netcraft_why = (
+            "ScamSlyce found that the submitted landing page leads to a higher-risk embedded destination. "
+            "Report the embedded destination first and include the submitted landing page as supporting evidence."
+        )
+
     actions.append({
         "priority": 1,
-        "title": "Report the main suspicious URL to Netcraft",
-        "why": "Good first reporting route for phishing, malware, fake shops, and suspicious URLs. Report the main page first and include supporting infrastructure as evidence.",
+        "title": netcraft_title,
+        "why": netcraft_why,
         "url": "https://report.netcraft.com/",
         "email": "scam@netcraft.com",
         "subject": f"Suspected malicious URL - {get_hostname(main_url)}",
@@ -1975,8 +2725,20 @@ def build_priority_reporting_actions(result: dict, user_situation: str) -> list[
 
     platform_domains = set()
 
-    if result["hosted_platform_detected"]:
+    if result["hosted_platform_detected"] and report_context["primary_report_type"] != "embedded_destination":
         platform_domains.add(result["original_domain"])
+
+    if report_context["primary_report_type"] == "embedded_destination":
+        primary_domain = get_registered_domain(report_context["primary_report_url"])
+        if is_hosting_platform(primary_domain):
+            platform_domains.add(primary_domain)
+
+        landing_domain = result["final_domain"]
+        landing_hostname = result["hostname"]
+        if is_hosting_platform(landing_domain):
+            platform_domains.add(landing_domain)
+        if landing_hostname in PLATFORM_REPORTING:
+            platform_domains.add(landing_hostname)
 
     for url in result["js_url_classification"]["hosting_platform_js_urls"]:
         platform_domains.add(get_registered_domain(url))
@@ -1990,6 +2752,13 @@ def build_priority_reporting_actions(result: dict, user_situation: str) -> list[
         if not config:
             continue
 
+        action_title = config["title"]
+        if (
+            report_context["primary_report_type"] == "embedded_destination"
+            and domain == result["hostname"]
+        ):
+            action_title = "Optional: report the landing page to the hosting/platform provider"
+
         subject = f"{config['subject_prefix']} - {get_hostname(main_url)}"
         body = build_email_body(result, user_situation, focus=domain)
 
@@ -1998,8 +2767,12 @@ def build_priority_reporting_actions(result: dict, user_situation: str) -> list[
 
         actions.append({
             "priority": next_priority,
-            "title": config["title"],
-            "why": f"ScamSlyce detected infrastructure connected to {domain}. Report the main URL and include supporting URLs as evidence.",
+            "title": action_title,
+            "why": (
+                f"ScamSlyce detected infrastructure connected to {domain}. "
+                "If this is the landing-page host, report it as a page that leads to a phishing destination. "
+                "If this is the embedded destination host, report the embedded URL as the primary suspicious URL."
+            ),
             "url": config.get("url", ""),
             "email": config.get("email", ""),
             "subject": subject,

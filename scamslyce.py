@@ -1,3 +1,5 @@
+from html import escape
+
 import streamlit as st
 
 from scamslyce_core import (
@@ -300,11 +302,18 @@ def risk_class(level: str) -> str:
 
 
 def render_result_card(result: dict):
-    css_class = risk_class(result["risk_level"])
+    display_level = result.get("overall_risk_level", result["risk_level"])
+    display_score = result.get("overall_risk_score", result["risk_score"])
+    css_class = risk_class(display_level)
     brands = ", ".join(identify_likely_brands(result)) or "No specific brand detected"
     key_concern = "No major concern detected"
+    lines = [
+        f'<div class="risk-label">Overall risk level: {escape(str(display_level))} · {display_score}/100</div>',
+    ]
 
-    if result["brand_impersonation"] and result["qr_session_pattern_detected"]:
+    if result.get("embedded_high_risk_found"):
+        key_concern = "Submitted page links to a high-risk embedded destination"
+    elif result["brand_impersonation"] and result["qr_session_pattern_detected"]:
         key_concern = "Brand impersonation with QR/session login behaviour"
     elif result["brand_impersonation"]:
         key_concern = "Possible brand impersonation"
@@ -313,13 +322,24 @@ def render_result_card(result: dict):
     elif result["js_analysis"]["suspicious_js_terms"]:
         key_concern = "Suspicious JavaScript/session indicators"
 
+    lines.append(f'<div class="muted">Main concern: {escape(key_concern)}</div>')
+
+    if result.get("embedded_high_risk_found"):
+        lines.append(
+            f'<div class="muted">Submitted page direct risk: {escape(str(result["risk_level"]))} · {result["risk_score"]}/100</div>'
+        )
+        lines.append(
+            f'<div class="muted">Highest embedded destination risk: {escape(str(result["embedded_highest_risk_level"]))} · {result["embedded_highest_risk_score"]}/100</div>'
+        )
+
+    lines.append(f'<div class="muted">Likely brand: {escape(brands)}</div>')
+    lines.append(f'<div class="url-chip">{escape(result["final_url"])}</div>')
+    body = "\n".join(lines)
+
     st.markdown(
         f"""
 <div class="result-card {css_class}">
-    <div class="risk-label">Risk level: {result['risk_level']} · {result['risk_score']}/100</div>
-    <div class="muted">Main concern: {key_concern}</div>
-    <div class="muted">Likely brand: {brands}</div>
-    <div class="url-chip">{result['final_url']}</div>
+{body}
 </div>
         """,
         unsafe_allow_html=True,
@@ -411,6 +431,18 @@ if analyse_button:
             st.subheader("Plain-English Summary")
 
             summary_points = []
+
+            if result.get("embedded_high_risk_found"):
+                high_risk_embedded = [
+                    item for item in result.get("embedded_analysis", [])
+                    if item.get("risk_level") in {"High", "Very High"}
+                ]
+                embedded_url = high_risk_embedded[0].get("final_url") or high_risk_embedded[0]["url"] if high_risk_embedded else "the embedded destination"
+                summary_points.append(
+                    f"The submitted page itself scored {result['risk_level']}, but it links to an embedded destination "
+                    f"that scored {result['embedded_highest_risk_level']}."
+                )
+                summary_points.append(f"Embedded destination: {embedded_url}")
 
             if result.get("inspection_status") in {"limited", "inconclusive"}:
                 summary_points.append(
@@ -505,7 +537,12 @@ if analyse_button:
             st.subheader("Main URL and Supporting Infrastructure")
             url_context = get_main_and_supporting_urls(result)
 
-            if result["risk_level"] == "Low":
+            if result.get("embedded_high_risk_found"):
+                st.write("**Primary suspicious URL to report first:**")
+                st.code(url_context["main_url"])
+                st.write("**Supporting landing page:**")
+                st.code(result["normalised_url"])
+            elif result["risk_level"] == "Low":
                 st.write("**Checked URL:**")
                 st.code(url_context["main_url"])
 
@@ -527,8 +564,14 @@ if analyse_button:
                 else:
                     st.write("No separate supporting infrastructure URLs were detected.")
 
+            if result.get("embedded_high_risk_found"):
+                st.write("**High-risk embedded destination found:**")
+                for item in result.get("embedded_analysis", []):
+                    if item.get("risk_level") in {"High", "Very High"}:
+                        st.code(item.get("final_url") or item["url"])
+
         with tab_report:
-            if result["risk_level"] == "Low":
+            if result["risk_level"] == "Low" and not result.get("embedded_high_risk_found"):
                 st.subheader("Reporting Not Usually Needed")
                 st.write(
                     "ScamSlyce did not detect major warning signs in this basic passive check. "
@@ -563,6 +606,13 @@ if analyse_button:
             else:
                 st.subheader("Priority Reporting Actions")
                 st.write("Start with the first action. These are the places to report the link. Use the full copy-paste abuse report below for each report.")
+                url_context = get_main_and_supporting_urls(result)
+
+                if result.get("embedded_high_risk_found"):
+                    st.write("**Primary suspicious URL:**")
+                    st.code(url_context["main_url"])
+                    st.write("**Supporting landing page:**")
+                    st.code(result["normalised_url"])
 
                 reporting_actions = build_priority_reporting_actions(result, user_situation)
 
@@ -590,6 +640,14 @@ if analyse_button:
         with tab_evidence:
             st.subheader("Technical Evidence")
 
+            st.write("**Overall chain assessment:**")
+            st.write(f"- Overall risk level: {result.get('overall_risk_level', result['risk_level'])}")
+            st.write(f"- Overall risk score: {result.get('overall_risk_score', result['risk_score'])}")
+            st.write(f"- Overall reason: {result.get('overall_risk_reason', 'Direct analysis only.')}")
+            if result.get("embedded_high_risk_found"):
+                st.write("- The embedded destination is driving the overall risk score.")
+
+            st.write("**Submitted page direct evidence:**")
             st.write(f"**Original URL:** {result['normalised_url']}")
             st.write(f"**Final URL:** {result['final_url']}")
             st.write(f"**Original registered domain:** {result['original_domain']}")
@@ -606,6 +664,21 @@ if analyse_button:
                 st.write("**Inspection notes:**")
                 for note in result["inspection_notes"]:
                     st.write(f"- {note}")
+
+            if result.get("embedded_analysis"):
+                st.write("**Embedded destination evidence:**")
+                for item in result["embedded_analysis"]:
+                    st.code(
+                        f"{item['url']}\n"
+                        f"Source: {item['source']}\n"
+                        f"Reason selected: {item['reason_selected']}\n"
+                        f"Selection score: {item['selection_score']}\n"
+                        f"Risk: {item.get('risk_level') or 'Not available'} ({item.get('risk_score') or 'N/A'}/100)\n"
+                        f"Final URL: {item.get('final_url') or 'Not available'}\n"
+                        f"Inspection status: {item.get('inspection_status') or 'unknown'}\n"
+                        f"Inspection notes: {' '.join(item.get('inspection_notes', [])) or 'None'}\n"
+                        f"Main concern: {item.get('main_concern') or item.get('error') or 'Not available'}"
+                    )
 
             if result["redirect_chain"]:
                 st.write("**Redirect chain:**")
