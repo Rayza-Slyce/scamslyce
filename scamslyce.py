@@ -165,6 +165,9 @@ URL_REGEX = re.compile(r"""https?://[^\s"'<>\\)]+""", re.IGNORECASE)
 
 MAX_EXTERNAL_JS_FILES = 5
 MAX_EXTERNAL_JS_BYTES = 250_000
+MAX_MAIN_RESPONSE_BYTES = 1_000_000
+MAX_REDIRECTS = 5
+ALLOWED_SCHEMES = {"http", "https"}
 
 
 # -----------------------------
@@ -280,47 +283,122 @@ def is_official_brand_domain(registered_domain: str) -> list[str]:
 # Fetching
 # -----------------------------
 
+def validate_public_url(url: str) -> str:
+    parsed = urlparse(url)
+
+    if parsed.scheme not in ALLOWED_SCHEMES:
+        raise ValueError("Only http and https URLs can be checked.")
+
+    if not parsed.hostname:
+        raise ValueError("URL does not contain a valid hostname.")
+
+    if is_private_or_local_host(parsed.hostname):
+        raise ValueError(
+            "This URL points to a private, local, internal, reserved, or otherwise unsafe address. "
+            "ScamSlyce will not scan it."
+        )
+
+    return url
+
+
+def read_response_limited(response, max_bytes: int) -> bytes:
+    chunks = []
+    total = 0
+    truncated = False
+
+    for chunk in response.iter_content(chunk_size=8192):
+        if not chunk:
+            continue
+
+        remaining = max_bytes - total
+
+        if remaining <= 0:
+            truncated = True
+            break
+
+        if len(chunk) > remaining:
+            chunks.append(chunk[:remaining])
+            total += remaining
+            truncated = True
+            break
+
+        chunks.append(chunk)
+        total += len(chunk)
+
+    response.scamslyce_truncated = truncated
+    return b"".join(chunks)
+
+
+def safe_fetch_response(url: str, max_bytes: int, user_agent: str):
+    current_url = validate_public_url(url)
+    history = []
+
+    session = requests.Session()
+    session.trust_env = False
+
+    headers = {
+        "User-Agent": user_agent,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+
+    for _ in range(MAX_REDIRECTS + 1):
+        current_url = validate_public_url(current_url)
+
+        response = session.get(
+            current_url,
+            headers=headers,
+            allow_redirects=False,
+            timeout=(5, 12),
+            stream=True,
+        )
+
+        response._content = read_response_limited(response, max_bytes)
+        response._content_consumed = True
+
+        if response.is_redirect or response.is_permanent_redirect:
+            location = response.headers.get("Location")
+
+            if not location:
+                response.history = history
+                return response
+
+            next_url = urljoin(current_url, location)
+            validate_public_url(next_url)
+
+            history.append(response)
+            current_url = next_url
+            continue
+
+        response.history = history
+        return response
+
+    raise ValueError(f"Too many redirects. ScamSlyce stops after {MAX_REDIRECTS} redirects for safety.")
+
+
 def fetch_url(url: str):
-    headers = {"User-Agent": "ScamSlyce/0.6 Safe Link Checker"}
-
-    response = requests.get(
-        url,
-        headers=headers,
-        allow_redirects=True,
-        timeout=12,
+    return safe_fetch_response(
+        url=url,
+        max_bytes=MAX_MAIN_RESPONSE_BYTES,
+        user_agent="ScamSlyce/0.7 Safe Link Checker",
     )
-
-    return response
 
 
 def fetch_text_limited(url: str, max_bytes: int = MAX_EXTERNAL_JS_BYTES) -> tuple[str, str]:
-    headers = {"User-Agent": "ScamSlyce/0.6 Safe JS Inspector"}
-
     try:
-        with requests.get(url, headers=headers, stream=True, timeout=12, allow_redirects=True) as response:
-            content_type = response.headers.get("Content-Type", "")
-            chunks = []
-            total = 0
+        response = safe_fetch_response(
+            url=url,
+            max_bytes=max_bytes,
+            user_agent="ScamSlyce/0.7 Safe JS Inspector",
+        )
 
-            for chunk in response.iter_content(chunk_size=8192):
-                if not chunk:
-                    continue
+        content_type = response.headers.get("Content-Type", "")
 
-                total += len(chunk)
+        try:
+            text = response.content.decode(response.encoding or "utf-8", errors="replace")
+        except LookupError:
+            text = response.content.decode("utf-8", errors="replace")
 
-                if total > max_bytes:
-                    break
-
-                chunks.append(chunk)
-
-            raw = b"".join(chunks)
-
-            try:
-                text = raw.decode(response.encoding or "utf-8", errors="replace")
-            except LookupError:
-                text = raw.decode("utf-8", errors="replace")
-
-            return text, content_type
+        return text, content_type
 
     except Exception:
         return "", ""
@@ -834,8 +912,7 @@ def analyse_url(raw_url: str, message_text: str = "") -> dict:
     url = normalise_url(raw_url)
     parsed = urlparse(url)
 
-    if is_private_or_local_host(parsed.hostname):
-        raise ValueError("This URL points to a private, local, or internal address. ScamSlyce will not scan it.")
+    validate_public_url(url)
 
     original_domain = get_registered_domain(url)
     hostname = get_hostname(url)
