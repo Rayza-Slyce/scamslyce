@@ -34,6 +34,21 @@ Do not submit private links, password reset links, magic login links, banking se
     pip install -r requirements.txt
     streamlit run scamslyce.py
 
+## Running URL regression tests
+
+ScamSlyce includes a simple URL regression harness for checking scoring changes against a fixed list of known-safe, noisy, benign test, and known phishing sample URLs.
+
+Run it with:
+
+    python3 tests/run_url_tests.py
+
+The runner loads `tests/test_urls.json`, calls `analyse_url(url, message_text="")` for each listed URL, prints a PASS/FAIL table, and writes:
+
+- `tests/latest_results.md`
+- `tests/latest_results.csv`
+
+Empty URLs and URLs containing `PASTE_YOUR_STREAMLIT_URL_HERE` are skipped.
+
 ## Feedback
 
 Feedback is welcome, especially:

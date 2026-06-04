@@ -1,0 +1,138 @@
+[
+  {
+    "name": "Google",
+    "url": "https://google.com",
+    "category": "known_safe",
+    "expected_level": "Low",
+    "max_score": 20,
+    "notes": "Major safe site, redirects to www.google.com."
+  },
+  {
+    "name": "YouTube",
+    "url": "https://youtube.com",
+    "category": "known_safe",
+    "expected_level": "Low",
+    "max_score": 20,
+    "notes": "Google-owned site with many Google links and JavaScript."
+  },
+  {
+    "name": "Netflix",
+    "url": "https://netflix.com",
+    "category": "known_safe",
+    "expected_level": "Low",
+    "max_score": 20,
+    "notes": "Large consumer site with login and JavaScript."
+  },
+  {
+    "name": "GitHub",
+    "url": "https://github.com",
+    "category": "known_safe",
+    "expected_level": "Low",
+    "max_score": 20,
+    "notes": "Developer platform with redirects, forms, and JavaScript."
+  },
+  {
+    "name": "GOV.UK",
+    "url": "https://www.gov.uk",
+    "category": "known_safe",
+    "expected_level": "Low",
+    "max_score": 20,
+    "notes": "Official UK government site."
+  },
+  {
+    "name": "BBC",
+    "url": "https://www.bbc.co.uk",
+    "category": "known_safe",
+    "expected_level": "Low",
+    "max_score": 25,
+    "notes": "Large media site with scripts and external resources."
+  },
+  {
+    "name": "Amazon UK",
+    "url": "https://www.amazon.co.uk",
+    "category": "known_safe_noisy",
+    "expected_level": "Low",
+    "max_score": 25,
+    "notes": "Large ecommerce site with login, redirects, forms, and scripts."
+  },
+  {
+    "name": "PayPal UK",
+    "url": "https://www.paypal.com/uk/home",
+    "category": "known_safe_noisy",
+    "expected_level": "Low",
+    "max_score": 25,
+    "notes": "Financial/login-heavy official site."
+  },
+  {
+    "name": "Microsoft",
+    "url": "https://www.microsoft.com",
+    "category": "known_safe",
+    "expected_level": "Low",
+    "max_score": 25,
+    "notes": "Official Microsoft site."
+  },
+  {
+    "name": "Outlook",
+    "url": "https://outlook.live.com",
+    "category": "known_safe_noisy",
+    "expected_level": "Low",
+    "max_score": 25,
+    "notes": "Microsoft-owned login-related domain."
+  },
+  {
+    "name": "Apple",
+    "url": "https://www.apple.com",
+    "category": "known_safe",
+    "expected_level": "Low",
+    "max_score": 20,
+    "notes": "Official Apple site."
+  },
+  {
+    "name": "Facebook",
+    "url": "https://www.facebook.com",
+    "category": "known_safe_noisy",
+    "expected_level": "Low",
+    "max_score": 25,
+    "notes": "Official Meta/Facebook domain with login elements."
+  },
+  {
+    "name": "Instagram",
+    "url": "https://www.instagram.com",
+    "category": "known_safe_noisy",
+    "expected_level": "Low",
+    "max_score": 25,
+    "notes": "Official Instagram domain with login elements."
+  },
+  {
+    "name": "JD Sports",
+    "url": "https://jdsports.co.uk",
+    "category": "known_safe_noisy",
+    "expected_level": "Low",
+    "max_score": 30,
+    "notes": "Noisy ecommerce site that previously false-positive matched Microsoft."
+  },
+  {
+    "name": "ScamSlyce live app",
+    "url": "https://scamslyce.streamlit.app/",
+    "category": "known_safe_self",
+    "expected_level": "Low",
+    "max_score": 25,
+    "notes": "Self-test for the deployed app."
+  },
+  {
+    "name": "AMTSO phishing test page",
+    "url": "https://www.amtso.org/check-desktop-phishing-page/",
+    "category": "benign_security_test",
+    "expected_level": "Low",
+    "max_score": 20,
+    "notes": "Benign security test page. Not malicious, but designed to exercise anti-phishing detection."
+  },
+  {
+    "name": "Meta phishing sample",
+    "url": "https://metastatuscenter.bolt.host/",
+    "category": "known_phishing_sample",
+    "expected_level": "Very High",
+    "min_score": 70,
+    "notes": "Known Meta/Facebook impersonation sample used during development."
+  }
+]
