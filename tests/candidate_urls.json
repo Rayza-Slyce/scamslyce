@@ -1,0 +1,72 @@
+[
+  {
+    "name": "PhishTank verified candidate 01",
+    "url": "http://allegrolokalnie.pl-490124809512.lol",
+    "category": "candidate_phishing",
+    "min_score": 30,
+    "notes": "Source: PhishTank online-valid feed. PhishTank ID: 9444054. Live phishing URLs may go offline or change behaviour quickly."
+  },
+  {
+    "name": "PhishTank verified candidate 02",
+    "url": "https://considerate-raven-173194.framer.app",
+    "category": "candidate_phishing",
+    "min_score": 30,
+    "notes": "Source: PhishTank online-valid feed. PhishTank ID: 9444042. Live phishing URLs may go offline or change behaviour quickly."
+  },
+  {
+    "name": "PhishTank verified candidate 03",
+    "url": "https://www.jour847060.pro/",
+    "category": "candidate_phishing",
+    "min_score": 30,
+    "notes": "Source: PhishTank online-valid feed. PhishTank ID: 9444030. Live phishing URLs may go offline or change behaviour quickly."
+  },
+  {
+    "name": "PhishTank verified candidate 04",
+    "url": "https://www.jour847060.pro/captcha.php",
+    "category": "candidate_phishing",
+    "min_score": 30,
+    "notes": "Source: PhishTank online-valid feed. PhishTank ID: 9444029. Live phishing URLs may go offline or change behaviour quickly."
+  },
+  {
+    "name": "PhishTank verified candidate 05",
+    "url": "https://abdoulatif.jour847060.pro/",
+    "category": "candidate_phishing",
+    "min_score": 30,
+    "notes": "Source: PhishTank online-valid feed. PhishTank ID: 9444028. Live phishing URLs may go offline or change behaviour quickly."
+  },
+  {
+    "name": "PhishTank verified candidate 06",
+    "url": "https://abdoulatif.jour847060.pro/captcha.php",
+    "category": "candidate_phishing",
+    "min_score": 30,
+    "notes": "Source: PhishTank online-valid feed. PhishTank ID: 9444027. Live phishing URLs may go offline or change behaviour quickly."
+  },
+  {
+    "name": "PhishTank verified candidate 07",
+    "url": "https://odile.jour847060.pro/",
+    "category": "candidate_phishing",
+    "min_score": 30,
+    "notes": "Source: PhishTank online-valid feed. PhishTank ID: 9444026. Live phishing URLs may go offline or change behaviour quickly."
+  },
+  {
+    "name": "PhishTank verified candidate 08",
+    "url": "https://odile.jour847060.pro/captcha.php",
+    "category": "candidate_phishing",
+    "min_score": 30,
+    "notes": "Source: PhishTank online-valid feed. PhishTank ID: 9444025. Live phishing URLs may go offline or change behaviour quickly."
+  },
+  {
+    "name": "PhishTank verified candidate 09",
+    "url": "https://patrick.jour847060.pro/",
+    "category": "candidate_phishing",
+    "min_score": 30,
+    "notes": "Source: PhishTank online-valid feed. PhishTank ID: 9444024. Live phishing URLs may go offline or change behaviour quickly."
+  },
+  {
+    "name": "PhishTank verified candidate 10",
+    "url": "https://patrick.jour847060.pro/captcha.php",
+    "category": "candidate_phishing",
+    "min_score": 30,
+    "notes": "Source: PhishTank online-valid feed. PhishTank ID: 9444023. Live phishing URLs may go offline or change behaviour quickly."
+  }
+]

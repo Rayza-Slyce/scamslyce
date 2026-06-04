@@ -17,6 +17,8 @@ CSV_COLUMNS = [
     "max_score",
     "actual_level",
     "actual_score",
+    "inspection_status",
+    "inspection_notes",
     "pass",
     "error",
     "notes",
@@ -25,8 +27,6 @@ CSV_COLUMNS = [
 TESTS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = TESTS_DIR.parent
 TEST_URLS_PATH = TESTS_DIR / "test_urls.json"
-MARKDOWN_RESULTS_PATH = TESTS_DIR / "latest_results.md"
-CSV_RESULTS_PATH = TESTS_DIR / "latest_results.csv"
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -41,8 +41,33 @@ def timeout_handler(signum, frame):
     raise UrlTestTimeout(f"Timed out after {TEST_TIMEOUT_SECONDS} seconds")
 
 
-def load_test_cases():
-    with TEST_URLS_PATH.open("r", encoding="utf-8") as file:
+def get_input_path():
+    if len(sys.argv) > 2:
+        raise SystemExit("Usage: python3 tests/run_url_tests.py [tests/some_urls.json]")
+
+    if len(sys.argv) == 2:
+        return Path(sys.argv[1])
+
+    return TEST_URLS_PATH
+
+
+def get_output_paths(input_path):
+    if input_path.resolve() == TEST_URLS_PATH.resolve():
+        return TESTS_DIR / "latest_results.md", TESTS_DIR / "latest_results.csv"
+
+    stem = input_path.stem
+
+    if stem.endswith("_urls"):
+        stem = stem[:-5]
+
+    return (
+        input_path.with_name(f"{stem}_results.md"),
+        input_path.with_name(f"{stem}_results.csv"),
+    )
+
+
+def load_test_cases(input_path):
+    with input_path.open("r", encoding="utf-8") as file:
         return json.load(file)
 
 
@@ -78,6 +103,8 @@ def run_one_test(test_case):
         "max_score": test_case.get("max_score", ""),
         "actual_level": "",
         "actual_score": "",
+        "inspection_status": "",
+        "inspection_notes": "",
         "pass": "",
         "error": "",
         "notes": test_case.get("notes", ""),
@@ -96,6 +123,8 @@ def run_one_test(test_case):
 
         row["actual_level"] = result["risk_level"]
         row["actual_score"] = result["risk_score"]
+        row["inspection_status"] = result.get("inspection_status", "")
+        row["inspection_notes"] = " ".join(result.get("inspection_notes", []))
         row["pass"] = check_expectations(
             test_case,
             result["risk_level"],
@@ -111,7 +140,7 @@ def run_one_test(test_case):
 
 
 def format_table(rows):
-    headers = ["status", "name", "category", "expected", "actual", "score", "error"]
+    headers = ["status", "name", "category", "expected", "actual", "score", "inspect", "error"]
     table_rows = []
 
     for row in rows:
@@ -137,6 +166,7 @@ def format_table(rows):
             " ".join(expected_parts),
             str(row["actual_level"]),
             str(row["actual_score"]),
+            row["inspection_status"],
             row["error"],
         ])
 
@@ -160,8 +190,8 @@ def format_table(rows):
     return "\n".join(lines)
 
 
-def write_csv_report(rows):
-    with CSV_RESULTS_PATH.open("w", encoding="utf-8", newline="") as file:
+def write_csv_report(rows, csv_results_path):
+    with csv_results_path.open("w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=CSV_COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
@@ -171,7 +201,7 @@ def markdown_escape(value):
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
-def write_markdown_report(rows):
+def write_markdown_report(rows, markdown_results_path, input_path):
     generated_at = datetime.now().isoformat(timespec="seconds")
     pass_count = sum(1 for row in rows if row["pass"] is True)
     fail_count = sum(1 for row in rows if row["pass"] is False)
@@ -181,13 +211,14 @@ def write_markdown_report(rows):
         "# ScamSlyce URL Regression Results",
         "",
         f"Generated: {generated_at}",
+        f"Input file: {input_path}",
         "",
         f"Passed: {pass_count}",
         f"Failed: {fail_count}",
         f"Skipped: {skip_count}",
         "",
-        "| Status | Name | Category | Expected Level | Min Score | Max Score | Actual Level | Actual Score | Error | Notes |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Status | Name | Category | Expected Level | Min Score | Max Score | Actual Level | Actual Score | Inspection Status | Inspection Notes | Error | Notes |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
 
     for row in rows:
@@ -209,17 +240,21 @@ def write_markdown_report(rows):
                 markdown_escape(row["max_score"]),
                 markdown_escape(row["actual_level"]),
                 markdown_escape(row["actual_score"]),
+                markdown_escape(row["inspection_status"]),
+                markdown_escape(row["inspection_notes"]),
                 markdown_escape(row["error"]),
                 markdown_escape(row["notes"]),
             ])
             + " |"
         )
 
-    MARKDOWN_RESULTS_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    markdown_results_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main():
-    test_cases = load_test_cases()
+    input_path = get_input_path()
+    markdown_results_path, csv_results_path = get_output_paths(input_path)
+    test_cases = load_test_cases(input_path)
     rows = []
 
     for test_case in test_cases:
@@ -227,11 +262,11 @@ def main():
 
     print(format_table(rows))
     print()
-    print(f"Markdown report: {MARKDOWN_RESULTS_PATH}")
-    print(f"CSV report: {CSV_RESULTS_PATH}")
+    print(f"Markdown report: {markdown_results_path}")
+    print(f"CSV report: {csv_results_path}")
 
-    write_markdown_report(rows)
-    write_csv_report(rows)
+    write_markdown_report(rows, markdown_results_path, input_path)
+    write_csv_report(rows, csv_results_path)
 
     failed = any(row["pass"] is False for row in rows)
     return 1 if failed else 0

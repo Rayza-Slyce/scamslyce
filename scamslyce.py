@@ -412,6 +412,14 @@ if analyse_button:
 
             summary_points = []
 
+            if result.get("inspection_status") in {"limited", "inconclusive"}:
+                summary_points.append(
+                    "ScamSlyce could not inspect enough of the real page to make a strong judgement. "
+                    "Do not treat a low score as proof that the link is safe."
+                )
+                for note in result.get("inspection_notes", [])[:3]:
+                    summary_points.append(note)
+
             if result["page_title"]:
                 summary_points.append(f"The page title is: '{result['page_title']}'.")
 
@@ -591,7 +599,13 @@ if analyse_button:
             st.write(f"**HTTP status:** {result['status_code']}")
             st.write(f"**Content-Type:** {result['content_type'] or 'Unknown'}")
             st.write(f"**Page title:** {result['page_title'] or 'Not detected'}")
+            st.write(f"**Inspection status:** {result.get('inspection_status', 'complete')}")
             st.write(f"**Redirect count:** {result['redirect_count']}")
+
+            if result.get("inspection_notes"):
+                st.write("**Inspection notes:**")
+                for note in result["inspection_notes"]:
+                    st.write(f"- {note}")
 
             if result["redirect_chain"]:
                 st.write("**Redirect chain:**")

@@ -601,6 +601,82 @@ def extract_page_title(html: str) -> str:
     return ""
 
 
+def assess_inspection_status(
+    status_code: int,
+    content_type: str,
+    html: str,
+    page_title: str,
+) -> dict:
+    notes = []
+    lower_content_type = content_type.lower()
+    visible_text = extract_visible_text(html) if html else ""
+    combined_text = f"{page_title} {visible_text[:1000]}".lower()
+
+    if status_code in {401, 403}:
+        notes.append(
+            f"The server returned HTTP {status_code}, so ScamSlyce may have seen an access-control or security page instead of the real page."
+        )
+
+    if status_code in {404, 410}:
+        notes.append(
+            f"The server returned HTTP {status_code}, so the page may be unavailable, removed, or already taken down."
+        )
+
+    if "text/html" not in lower_content_type:
+        notes.append(
+            f"The response was not HTML ({content_type or 'unknown content type'}), so page content inspection was limited."
+        )
+
+    interstitial_markers = [
+        "attention required",
+        "cloudflare",
+        "just a moment",
+        "access denied",
+        "checking your browser",
+    ]
+    if any(marker in combined_text for marker in interstitial_markers):
+        notes.append(
+            "The page appears to be a security, anti-bot, or access-denied interstitial rather than the real destination content."
+        )
+
+    placeholder_markers = [
+        "my framer site",
+        "not found",
+        "access denied",
+        "page not found",
+        "404",
+        "coming soon",
+    ]
+    if any(marker in combined_text for marker in placeholder_markers):
+        notes.append(
+            "The page title or body looks like a generic placeholder, holding page, or error page."
+        )
+
+    if html and len(visible_text.strip()) < 80:
+        notes.append(
+            "The visible HTML text was very short, so ScamSlyce had little page content to inspect."
+        )
+
+    if not html:
+        notes.append(
+            "No inspectable HTML body was available for page, form, link, or JavaScript context checks."
+        )
+
+    notes = unique_strings(notes, limit=10)
+
+    if not notes:
+        status = "complete"
+    elif status_code in {404, 410} or not html:
+        status = "inconclusive"
+    else:
+        status = "limited"
+
+    return {
+        "inspection_status": status,
+        "inspection_notes": notes,
+    }
+
+
 def detect_forms(html: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
 
@@ -1336,6 +1412,13 @@ def analyse_url(raw_url: str, message_text: str = "") -> dict:
 
     content_type = response.headers.get("Content-Type", "")
     html = response.text if "text/html" in content_type else ""
+    page_title = extract_page_title(html)
+    inspection = assess_inspection_status(
+        response.status_code,
+        content_type,
+        html,
+        page_title,
+    )
 
     forms = detect_forms(html)
     embedded_links = extract_embedded_links(html, final_url)
@@ -1368,7 +1451,9 @@ def analyse_url(raw_url: str, message_text: str = "") -> dict:
         "subdomain": subdomain,
         "status_code": response.status_code,
         "content_type": content_type,
-        "page_title": extract_page_title(html),
+        "page_title": page_title,
+        "inspection_status": inspection["inspection_status"],
+        "inspection_notes": inspection["inspection_notes"],
         "redirect_chain": redirect_chain,
         "redirect_count": redirect_count,
         "is_shortener": original_domain in KNOWN_SHORTENERS,
@@ -1411,10 +1496,17 @@ def build_action_plan(result: dict, user_situation: str) -> list[str]:
     low_risk = result["risk_level"] == "Low"
 
     if low_risk:
-        actions = [
-            "No major warning signs were detected by ScamSlyce's basic passive checks.",
-            "Reporting is probably not necessary unless you still have a specific reason to be concerned.",
-        ]
+        if result.get("inspection_status") in {"limited", "inconclusive"}:
+            actions = [
+                "ScamSlyce could not inspect enough of the real page to make a strong judgement.",
+                "Do not treat the low score as proof that the link is safe.",
+                "Use the official website or app directly if the link was unexpected or asks for sensitive information.",
+            ]
+        else:
+            actions = [
+                "No major warning signs were detected by ScamSlyce's basic passive checks.",
+                "Reporting is probably not necessary unless you still have a specific reason to be concerned.",
+            ]
 
         if user_situation == "I only received the link/message":
             actions.append("If the message was unexpected, verify through the official website or app rather than relying only on the supplied link.")
@@ -1540,6 +1632,23 @@ def build_simple_summary(result: dict, user_situation: str = "") -> str:
     brand_text = ", ".join(brands) if brands else "a known brand or service"
 
     if result["risk_level"] == "Low":
+        if result.get("inspection_status") in {"limited", "inconclusive"}:
+            inspection_notes = result.get("inspection_notes", [])
+            summary = (
+                "This link scored Low, but ScamSlyce could not inspect enough of the real page "
+                "to make a strong judgement.\n\n"
+            )
+
+            if inspection_notes:
+                summary += "Inspection limits observed: " + " ".join(inspection_notes[:3]) + "\n\n"
+
+            summary += (
+                "Do not treat this as proof that the link is safe. Verify through the official website "
+                "or app if the message was unexpected or asks for sensitive information."
+            )
+
+            return summary
+
         summary = "This link did not show major warning signs in this basic passive check.\n\n"
 
         if user_situation == "I only received the link/message":
@@ -1623,6 +1732,10 @@ def build_targeted_abuse_report(result: dict, user_situation: str, target_name: 
     if result["js_url_classification"]["api_like_urls"]:
         api_urls = "\n".join(f"- {url}" for url in result["js_url_classification"]["api_like_urls"][:10])
 
+    inspection_notes = "None"
+    if result.get("inspection_notes"):
+        inspection_notes = "\n".join(f"- {note}" for note in result["inspection_notes"])
+
     reasons = []
 
     if result["brand_impersonation"]:
@@ -1687,12 +1800,16 @@ Technical indicators:
 - HTTP status: {result['status_code']}
 - Content-Type: {result['content_type'] or 'Unknown'}
 - Redirect count: {result['redirect_count']}
+- Inspection status: {result.get('inspection_status', 'complete')}
 - External embedded links found: {len(result['link_classification']['external_links'])}
 - Script URLs found on page: {len(result['embedded_links']['scripts'])}
 - Same-domain script files fetched and inspected: {len(result['js_analysis']['external_js']['fetched_scripts'])}
 - JavaScript URLs found: {result['js_analysis']['js_url_count']}
 - API/session-like JavaScript URLs found: {len(result['js_url_classification']['api_like_urls'])}
 - Possible QR/session login flow detected: {result['qr_session_pattern_detected']}
+
+Inspection notes:
+{inspection_notes}
 
 Suspicious JavaScript/session terms:
 {js_terms}
@@ -1718,6 +1835,10 @@ def build_email_body(result: dict, user_situation: str, focus: str = "general") 
     supporting_text = "None detected"
     if url_context["supporting_urls"]:
         supporting_text = "\n".join(f"- {url}" for url in url_context["supporting_urls"][:15])
+
+    inspection_notes = "None"
+    if result.get("inspection_notes"):
+        inspection_notes = "\n".join(f"- {note}" for note in result["inspection_notes"])
 
     indicators = []
 
@@ -1781,6 +1902,7 @@ Technical evidence:
 - HTTP status: {result['status_code']}
 - Content-Type: {result['content_type'] or 'Unknown'}
 - Redirect count: {result['redirect_count']}
+- Inspection status: {result.get('inspection_status', 'complete')}
 - External embedded links found: {len(result['link_classification']['external_links'])}
 - Official brand links found in HTML: {len(result['link_classification']['official_brand_links'])}
 - Official brand URLs found in JavaScript: {len(result['js_url_classification']['official_brand_js_urls'])}
@@ -1788,6 +1910,9 @@ Technical evidence:
 - Same-domain script files fetched: {len(result['js_analysis']['external_js']['fetched_scripts'])}
 - JavaScript URLs found: {result['js_analysis']['js_url_count']}
 - API/session-like JavaScript URLs found: {len(result['js_url_classification']['api_like_urls'])}
+
+Inspection notes:
+{inspection_notes}
 
 This report is based on passive inspection only. No login attempts, form submissions, brute forcing, vulnerability scanning, directory fuzzing, port scanning, or bypass activity were performed.
 

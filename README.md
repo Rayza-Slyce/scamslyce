@@ -38,7 +38,7 @@ Do not submit private links, password reset links, magic login links, banking se
 
 ScamSlyce includes a simple URL regression harness for checking scoring changes against a fixed list of known-safe, noisy, benign test, and known phishing sample URLs.
 
-Run it with:
+Run the stable regression suite with:
 
     python3 tests/run_url_tests.py
 
@@ -48,6 +48,19 @@ The runner loads `tests/test_urls.json`, calls `analyse_url(url, message_text=""
 - `tests/latest_results.csv`
 
 Empty URLs and URLs containing `PASTE_YOUR_STREAMLIT_URL_HERE` are skipped.
+
+## Running candidate phishing tests
+
+Candidate phishing URLs are kept separate from the stable regression suite because live phishing links are volatile and may go offline or change behaviour quickly.
+
+Run candidate tests with:
+
+    python3 tests/run_url_tests.py tests/candidate_urls.json
+
+This writes:
+
+- `tests/candidate_results.md`
+- `tests/candidate_results.csv`
 
 ## Feedback
 

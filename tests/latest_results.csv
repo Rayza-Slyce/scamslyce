@@ -1,18 +1,18 @@
-name,url,category,expected_level,min_score,max_score,actual_level,actual_score,pass,error,notes
-Google,https://google.com,known_safe,Low,,20,Low,0,True,,"Major safe site, redirects to www.google.com."
-YouTube,https://youtube.com,known_safe,Low,,20,Low,0,True,,Google-owned site with many Google links and JavaScript.
-Netflix,https://netflix.com,known_safe,Low,,20,Low,0,True,,Large consumer site with login and JavaScript.
-GitHub,https://github.com,known_safe,Low,,20,Low,0,True,,"Developer platform with redirects, forms, and JavaScript."
-GOV.UK,https://www.gov.uk,known_safe,Low,,20,Low,0,True,,Official UK government site.
-BBC,https://www.bbc.co.uk,known_safe,Low,,25,Low,0,True,,Large media site with scripts and external resources.
-Amazon UK,https://www.amazon.co.uk,known_safe_noisy,Low,,25,Low,0,True,,"Large ecommerce site with login, redirects, forms, and scripts."
-PayPal UK,https://www.paypal.com/uk/home,known_safe_noisy,Low,,25,Low,0,True,,Financial/login-heavy official site.
-Microsoft,https://www.microsoft.com,known_safe,Low,,25,Low,0,True,,Official Microsoft site.
-Outlook,https://outlook.live.com,known_safe_noisy,Low,,25,Low,0,True,,Microsoft-owned login-related domain.
-Apple,https://www.apple.com,known_safe,Low,,20,Low,0,True,,Official Apple site.
-Facebook,https://www.facebook.com,known_safe_noisy,Low,,25,Low,0,True,,Official Meta/Facebook domain with login elements.
-Instagram,https://www.instagram.com,known_safe_noisy,Low,,25,Low,0,True,,Official Instagram domain with login elements.
-JD Sports,https://jdsports.co.uk,known_safe_noisy,Low,,30,Low,0,True,,Noisy ecommerce site that previously false-positive matched Microsoft.
-ScamSlyce live app,https://scamslyce.streamlit.app/,known_safe_self,Low,,25,Low,0,True,,Self-test for the deployed app.
-AMTSO phishing test page,https://www.amtso.org/check-desktop-phishing-page/,benign_security_test,Low,,20,Low,0,True,,"Benign security test page. Not malicious, but designed to exercise anti-phishing detection."
-Meta phishing sample,https://metastatuscenter.bolt.host/,known_phishing_sample,Very High,70,,Very High,100,True,,Known Meta/Facebook impersonation sample used during development.
+name,url,category,expected_level,min_score,max_score,actual_level,actual_score,inspection_status,inspection_notes,pass,error,notes
+Google,https://google.com,known_safe,Low,,20,Low,0,complete,,True,,"Major safe site, redirects to www.google.com."
+YouTube,https://youtube.com,known_safe,Low,,20,Low,0,complete,,True,,Google-owned site with many Google links and JavaScript.
+Netflix,https://netflix.com,known_safe,Low,,20,Low,0,limited,"The visible HTML text was very short, so ScamSlyce had little page content to inspect.",True,,Large consumer site with login and JavaScript.
+GitHub,https://github.com,known_safe,Low,,20,Low,0,complete,,True,,"Developer platform with redirects, forms, and JavaScript."
+GOV.UK,https://www.gov.uk,known_safe,Low,,20,Low,0,complete,,True,,Official UK government site.
+BBC,https://www.bbc.co.uk,known_safe,Low,,25,Low,0,complete,,True,,Large media site with scripts and external resources.
+Amazon UK,https://www.amazon.co.uk,known_safe_noisy,Low,,25,Low,0,complete,,True,,"Large ecommerce site with login, redirects, forms, and scripts."
+PayPal UK,https://www.paypal.com/uk/home,known_safe_noisy,Low,,25,Low,0,complete,,True,,Financial/login-heavy official site.
+Microsoft,https://www.microsoft.com,known_safe,Low,,25,Low,0,complete,,True,,Official Microsoft site.
+Outlook,https://outlook.live.com,known_safe_noisy,Low,,25,Low,0,limited,"The visible HTML text was very short, so ScamSlyce had little page content to inspect.",True,,Microsoft-owned login-related domain.
+Apple,https://www.apple.com,known_safe,Low,,20,Low,0,complete,,True,,Official Apple site.
+Facebook,https://www.facebook.com,known_safe_noisy,Low,,25,Low,0,limited,"The visible HTML text was very short, so ScamSlyce had little page content to inspect.",True,,Official Meta/Facebook domain with login elements.
+Instagram,https://www.instagram.com,known_safe_noisy,Low,,25,Low,0,complete,,True,,Official Instagram domain with login elements.
+JD Sports,https://jdsports.co.uk,known_safe_noisy,Low,,30,Low,0,complete,,True,,Noisy ecommerce site that previously false-positive matched Microsoft.
+ScamSlyce live app,https://scamslyce.streamlit.app/,known_safe_self,Low,,25,Low,0,limited,"The visible HTML text was very short, so ScamSlyce had little page content to inspect.",True,,Self-test for the deployed app.
+AMTSO phishing test page,https://www.amtso.org/check-desktop-phishing-page/,benign_security_test,Low,,20,Low,0,complete,,True,,"Benign security test page. Not malicious, but designed to exercise anti-phishing detection."
+Meta phishing sample,https://metastatuscenter.bolt.host/,known_phishing_sample,Very High,70,,Very High,100,limited,"The visible HTML text was very short, so ScamSlyce had little page content to inspect.",True,,Known Meta/Facebook impersonation sample used during development.
