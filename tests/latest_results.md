@@ -1,6 +1,6 @@
 # ScamSlyce URL Regression Results
 
-Generated: 2026-06-05T00:34:16
+Generated: 2026-06-05T09:51:37
 Input file: /home/rayza/projects/phishcheck/tests/test_urls.json
 
 Passed: 18

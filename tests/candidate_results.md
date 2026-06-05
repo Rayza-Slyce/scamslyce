@@ -1,6 +1,6 @@
 # ScamSlyce URL Regression Results
 
-Generated: 2026-06-05T00:35:36
+Generated: 2026-06-05T09:52:06
 Input file: tests/candidate_urls.json
 
 Passed: 0
@@ -9,7 +9,7 @@ Skipped: 0
 
 | Status | Name | Category | Expected Level | Min Score | Max Score | Expected Overall Level | Min Overall Score | Max Overall Score | Direct Level | Direct Score | Overall Level | Overall Score | Embedded High Risk Found | Embedded Highest Risk Level | Embedded Highest Risk Score | Inspection Status | Inspection Notes | Error | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| FAIL | PhishTank verified candidate 01 | candidate_phishing |  | 30 |  |  |  |  | Low | 5 | Low | 5 | False |  | 0 | inconclusive | The server returned HTTP 404, so the page may be unavailable, removed, or already taken down. The response was not HTML (text/plain; charset=utf-8), so page content inspection was limited. No inspectable HTML body was available for page, form, link, or JavaScript context checks. |  | Source: PhishTank online-valid feed. PhishTank ID: 9444054. Live phishing URLs may go offline or change behaviour quickly. |
+| FAIL | PhishTank verified candidate 01 | candidate_phishing |  | 30 |  |  |  |  |  |  |  |  |  |  |  |  |  | HTTPConnectionPool(host='allegrolokalnie.pl-490124809512.lol', port=80): Max retries exceeded with url: / (Caused by NameResolutionError("HTTPConnection(host='allegrolokalnie.pl-490124809512.lol', port=80): Failed to resolve 'allegrolokalnie.pl-490124809512.lol' ([Errno -2] Name or service not known)")) | Source: PhishTank online-valid feed. PhishTank ID: 9444054. Live phishing URLs may go offline or change behaviour quickly. |
 | FAIL | PhishTank verified candidate 02 | candidate_phishing |  | 30 |  |  |  |  | Low | 5 | Low | 5 | False | Low | 0 | limited | The page title or body looks like a generic placeholder, holding page, or error page. |  | Source: PhishTank online-valid feed. PhishTank ID: 9444042. Live phishing URLs may go offline or change behaviour quickly. |
 | FAIL | PhishTank verified candidate 03 | candidate_phishing |  | 30 |  |  |  |  | Low | 0 | Low | 0 | False | Low | 0 | limited | The server returned HTTP 403, so ScamSlyce may have seen an access-control or security page instead of the real page. The page appears to be a security, anti-bot, or access-denied interstitial rather than the real destination content. |  | Source: PhishTank online-valid feed. PhishTank ID: 9444030. Live phishing URLs may go offline or change behaviour quickly. |
 | FAIL | PhishTank verified candidate 04 | candidate_phishing |  | 30 |  |  |  |  | Low | 0 | Low | 0 | False | Low | 0 | limited | The server returned HTTP 403, so ScamSlyce may have seen an access-control or security page instead of the real page. The page appears to be a security, anti-bot, or access-denied interstitial rather than the real destination content. |  | Source: PhishTank online-valid feed. PhishTank ID: 9444029. Live phishing URLs may go offline or change behaviour quickly. |
